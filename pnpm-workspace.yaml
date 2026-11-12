@@ -1,3 +1,13 @@
+# NOTE: no `packages:` field on purpose.
+# Declaring a pnpm workspace here makes `cf` (beta) treat the repo root as a
+# workspace root and refuse `cf build` from it ("application detection logic has
+# been run in the root of a workspace" / "multiple frameworks were found").
+# The Cloudflare Worker lives at the repo root (`src/index.ts` +
+# `cloudflare.config.ts`, see AGENTS.md), so the root must stay buildable.
+# Shared code is instead resolved via `packages/features/package.json` exports
+# and relative TypeScript imports; see packages/features/README.md.
+# Keep this file for pnpm build-script allow-listing only.
+
 onlyBuiltDependencies:
   - esbuild
   - workerd

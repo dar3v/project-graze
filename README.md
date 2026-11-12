@@ -12,6 +12,7 @@ Sculpt a procedurally generated valley, let a trained model predict what vegetat
 | Area | State |
 | --- | --- |
 | Repo and tooling | In progress |
+| Shared features contract (`@graze/features`) | In progress |
 | Terrain sandbox (noise terrain, water, camera) | Planned |
 | Data pipeline (download, prepare, split) | Planned |
 | Model training and evaluation | Planned |
@@ -69,7 +70,7 @@ The ecology rules are **assumptions we wrote**, not model output. Only the habit
 
 ### Prerequisites
 
-- Node.js (current LTS) and a package manager (commands below use `npm`; swap in `pnpm` or `bun` if you use them)
+- Node.js (current LTS) and pnpm (the repo has a `pnpm-lock.yaml`; commands below use `pnpm`)
 - A Cloudflare account, only needed for deployment
 
 ### Install and run
@@ -77,8 +78,8 @@ The ecology rules are **assumptions we wrote**, not model output. Only the habit
 ```bash
 git clone <repo-url>
 cd <repo-folder>
-npm install
-npm run dev
+pnpm install
+pnpm run dev
 ```
 
 The dev server prints a local URL. If your layout keeps the Worker and the web app in separate folders, run the commands from the matching folder.
@@ -86,18 +87,20 @@ The dev server prints a local URL. If your layout keeps the Worker and the web a
 ### Deploy
 
 ```bash
-npm run deploy
+pnpm run deploy
 ```
 
-Run `npx wrangler login` first if you haven't authenticated. Check Cloudflare's current free-tier limits before launch.
+This project uses the `cf` CLI, not wrangler (see `AGENTS.md`). Run `npx cf --help`
+and `cf cli search` to find the authentication command before deploying. Check
+Cloudflare's current free-tier limits before launch.
 
 ### Train the model *(scripts will be added as the pipeline lands)*
 
 ```bash
-npm run ml:fetch      # download Covertype and verify the checksum
-npm run ml:prepare    # clean, encode, scale, split
-npm run ml:train      # train candidates, export model.json and model_card.json
-npm run ml:evaluate   # metrics, confusion matrix, ablations
+pnpm run ml:fetch      # download Covertype and verify the checksum
+pnpm run ml:prepare    # clean, encode, scale, split
+pnpm run ml:train      # train candidates, export model.json and model_card.json
+pnpm run ml:evaluate   # metrics, confusion matrix, ablations
 ```
 
 Seeds are fixed, dependencies are pinned, and versions are recorded in `model_card.json`, so rebuilding the model from scratch should reproduce the reported results.
@@ -107,10 +110,22 @@ Seeds are fixed, dependencies are pinned, and versions are recorded in `model_ca
 ## Project structure
 
 ```
-idk
+apps/web/                 # Svelte + Vite + three.js frontend (stub)
+packages/features/        # @graze/features — shared terrain-feature contract
+packages/sim/             # herd simulation (stub)
+ml/                       # Node/TypeScript training scripts (stub)
+docs/                     # model card, dataset card, limitations notice (stubs)
+src/index.ts              # Hono Worker entrypoint (Cloudflare template)
+cloudflare.config.ts      # Worker config / bindings
+vite.config.ts            # Vite + @cloudflare/vite-plugin
 ```
 
-*Adjust to match the repo as it grows.*
+*`packages/features` is the single source of truth: `ml/` and `apps/web` both
+import it, so preprocessing cannot drift between training and inference. There
+is intentionally no pnpm `packages:` workspace declaration — `cf` (beta) cannot
+build from a workspace root, and the Worker lives at the repo root. See
+`pnpm-workspace.yaml` and `packages/features/README.md` for how the shared
+module is resolved.*
 
 ---
 

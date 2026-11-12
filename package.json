@@ -5,7 +5,8 @@
     "dev": "cf dev",
     "build": "cf build",
     "deploy": "cf deploy",
-    "typecheck": "cf workers types && tsc"
+    "typecheck": "cf workers types && tsc",
+    "test": "node --experimental-strip-types --test packages/features/test/*.test.ts"
   },
   "dependencies": {
     "hono": "5.0.0-rc.1"
