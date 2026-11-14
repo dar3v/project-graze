@@ -130,7 +130,36 @@ The **without-hillshade ablation** measures how much the model depends on
 these three columns. If the drop is small, any remaining mismatch matters
 little.
 
-## 6. Open questions for humans
+## 6. Out-of-distribution detector (D6) *(agent draft)*
+
+**Shipped method: `standardized-distance`.** It is the only detector the app
+runtime supports (`docs/feature-contract.md`). For each feature it takes
+the z-score against the training mean and std, then the root-mean-square of
+those z-scores. This is a diagonal Mahalanobis distance divided by √d.
+
+- **Threshold:**
+  - The detector is fit on the dev set's inner-fit rows.
+  - The threshold is the 99th percentile of the scores on the inner
+    holdout (`OOD_PERCENTILE` in `ml/src/config.ts`).
+  - The holdout rows are in-distribution but unseen, so about 1% of normal
+    rows are flagged by design.
+  - 99% keeps false alarms on real terrain rare while still flagging the
+    extreme fixture.
+- **Comparison:** `ml/reports/train-report.json` (`ood`) also reports a
+  full-covariance Mahalanobis detector, which accounts for correlated
+  features.
+- **Reported flagged rates:**
+  - dev holdout;
+  - each held-out wilderness area, with the detector fit without that area;
+  - cells from the Sandbox page's current generated terrain.
+- **What it cannot catch:** inputs that sit near the centre of each feature
+  but form combinations never seen in real landscapes, and anything about
+  the terrain that the 9 features don't describe.
+- **Exports:** `isOOD(detector, vector)` in `ml/src/ood.ts`. The app uses
+  the same formula (`oodScore`), and the inference test checks that both
+  agree.
+
+## 7. Open questions for humans
 
 - Sign off on sections 1–5, and write the interpretation of results
   (D8: "conclusions must be yours").

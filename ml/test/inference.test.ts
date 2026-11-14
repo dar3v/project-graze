@@ -13,6 +13,7 @@ import { createEngine, modelPredictor } from '../../apps/web/src/lib/model/engin
 import { argmax, oodScore, parseModelJson, predictProbs } from '../../apps/web/src/lib/model/inference.ts'
 import { parseModelCard } from '../../apps/web/src/lib/model/modelCard.ts'
 import { FIXTURES_PATH, MODEL_OUT_DIR } from '../src/data/paths.ts'
+import { isOOD } from '../src/ood.ts'
 
 const modelPath = join(MODEL_OUT_DIR, 'model.json')
 const cardPath = join(MODEL_OUT_DIR, 'model_card.json')
@@ -45,6 +46,7 @@ test('shipped model_card.json and model.json load in the app and reproduce the f
     const score = oodScore(parsed.model, v)
     assert.ok(score !== null && Math.abs(score - f.oodScore) <= 1e-9, f.source)
     assert.equal(score! > parsed.model.ood!.threshold, f.ood, f.source)
+    assert.equal(isOOD({ ...parsed.model.ood!, mean: [...parsed.model.ood!.mean], std: [...parsed.model.ood!.std] }, v), f.ood, f.source)
   }
   // The extreme fixture must be flagged.
   assert.ok(fixtures.cases.some((f) => f.source.startsWith('extreme') && f.ood))

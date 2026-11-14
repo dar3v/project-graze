@@ -100,3 +100,13 @@ export function flaggedRate(scores: Float64Array, threshold: number): number {
   for (const s of scores) if (s > threshold) n++
   return scores.length > 0 ? n / scores.length : 0
 }
+
+/**
+ * True when a feature vector (FEATURE_NAMES order) is out of distribution for
+ * the shipped detector: the same test the app runs (`oodScore > threshold`).
+ */
+export function isOOD(det: StandardizedDetector, vector: ArrayLike<number>): boolean {
+  let s = 0
+  for (let c = 0; c < vector.length; c++) s += ((vector[c] - det.mean[c]) / det.std[c]) ** 2
+  return Math.sqrt(s / vector.length) > det.threshold
+}

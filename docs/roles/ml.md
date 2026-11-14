@@ -34,58 +34,58 @@ You **produce** the model, the feature code, and the cards. You **consume** noth
 Each item is done only when every checkbox is ticked.
 
 ### D1. Data spike (tonight)
-- [ ] Script downloads and parses Covertype (581,012 rows, 54 features, 7 classes)
-- [ ] Prints class counts
-- [ ] Prints majority-class baseline accuracy
-- [ ] Prints elevation-band rule baseline accuracy
-- [ ] `docs/notes.md` records which TypeScript approach you will use (from-scratch softmax, `ml-random-forest`, TensorFlow.js) and whether installs worked
+- [x] Script downloads and parses Covertype (581,012 rows, 54 features, 7 classes) *(`pnpm ml:fetch`; SHA-256 verified)*
+- [x] Prints class counts *(`pnpm ml:explore`)*
+- [x] Prints majority-class baseline accuracy
+- [x] Prints elevation-band rule baseline accuracy
+- [x] `docs/notes.md` records which TypeScript approach you will use (from-scratch softmax, `ml-random-forest`, TensorFlow.js) and whether installs worked *(section 1: all from scratch, no installs needed)*
 
 ### D2. Shared features (Days 1-3)
-- [ ] `packages/features/features.ts` exports: raw columns to model vector, and heightmap to raw columns (elevation, slope, aspect, hillshade x3, water distances)
-- [ ] Each formula documented in `docs/feature-contract.md`
-- [ ] Unit test on a tiny hand-checkable heightmap
-- [ ] A note on how our hillshade computation may differ from the dataset's original method (this is why the ablation exists)
+- [x] `packages/features/features.ts` exports: raw columns to model vector, and heightmap to raw columns (elevation, slope, aspect, hillshade x3, water distances) *(heightmap function lives in `src/terrain.ts`, exported from the package index)*
+- [x] Each formula documented in `docs/feature-contract.md`
+- [x] Unit test on a tiny hand-checkable heightmap *(`packages/features/test/terrain.test.ts`)*
+- [x] A note on how our hillshade computation may differ from the dataset's original method (this is why the ablation exists) *(`docs/notes.md` section 5)*
 
 ### D3. Data preparation and splits (Days 2-3)
-- [ ] Exploration summary: class balance, feature ranges, missing or odd values
-- [ ] Stratified random split (documented as optimistic, because neighboring cells are correlated)
-- [ ] Leave-one-wilderness-area-out folds (the honest evaluation)
-- [ ] Final test set locked away and untouched until the model is frozen
-- [ ] Scalers fit on training folds only
-- [ ] A leakage test that fails if test rows appear in training
+- [x] Exploration summary: class balance, feature ranges, missing or odd values *(`ml/reports/exploration.json`, `docs/dataset-card.md`)*
+- [x] Stratified random split (documented as optimistic, because neighboring cells are correlated)
+- [x] Leave-one-wilderness-area-out folds (the honest evaluation)
+- [x] Final test set locked away and untouched until the model is frozen *(`LockedTestSet` + `ml/splits.lock.json`)*
+- [x] Scalers fit on training folds only
+- [x] A leakage test that fails if test rows appear in training *(`ml/test/splits.test.ts`)*
 
 ### D4. Training and comparison (Days 4-5)
-- [ ] Selection rule written to `docs/notes.md` **before** you look at results: best macro-F1 on leave-area-out folds; prefer the simpler model if within noise
-- [ ] Models: majority baseline, elevation-band rule, softmax regression, random forest, small MLP
-- [ ] Fixed random seeds
-- [ ] One command (`npm run ml:train`) reproduces everything
-- [ ] Tuning uses training folds only
+- [x] Selection rule written to `docs/notes.md` **before** you look at results: best macro-F1 on leave-area-out folds; prefer the simpler model if within noise *(section 3; section 2 discloses the random-split smoke test run first)*
+- [x] Models: majority baseline, elevation-band rule, softmax regression, random forest, small MLP
+- [x] Fixed random seeds *(two runs gave a byte-identical `model.json`)*
+- [x] One command (`npm run ml:train`) reproduces everything *(`pnpm ml:train`, ~4 min)*
+- [x] Tuning uses training folds only *(inner holdout of each training fold)*
 
 ### D5. Evaluation (Days 4-5)
-- [ ] Confusion matrix, accuracy, per-class precision/recall/F1, macro-F1, log loss
-- [ ] Both split types reported side by side
-- [ ] Ablations: terrain-only vs. all original features, with vs. without hillshade, with vs. without water-distance features
-- [ ] Calibration check and temperature scaling
-- [ ] Permutation importance (global)
-- [ ] Per-class results discussed, because two classes dominate and accuracy alone misleads
+- [x] Confusion matrix, accuracy, per-class precision/recall/F1, macro-F1, log loss
+- [x] Both split types reported side by side
+- [x] Ablations: terrain-only vs. all original features, with vs. without hillshade, with vs. without water-distance features
+- [x] Calibration check and temperature scaling
+- [x] Permutation importance (global)
+- [ ] Per-class results discussed, because two classes dominate and accuracy alone misleads *(numbers are in `model_card.json`; the discussion is for humans to write)*
 
 ### D6. Out-of-distribution detector (Days 5-6)
-- [ ] kNN distance or Mahalanobis distance from the training feature distribution
-- [ ] Threshold chosen from the training data (for example, a high percentile of held-out distances), with the choice documented
-- [ ] `isOOD(vector)` exported and parameters stored in `model.json`
-- [ ] Report how often real held-out rows are flagged vs. generated-terrain cells
+- [x] kNN distance or Mahalanobis distance from the training feature distribution *(diagonal Mahalanobis (`standardized-distance`) shipped; full Mahalanobis reported for comparison)*
+- [x] Threshold chosen from the training data (for example, a high percentile of held-out distances), with the choice documented *(99th percentile, `docs/notes.md` section 6)*
+- [x] `isOOD(vector)` exported and parameters stored in `model.json` *(`ml/src/ood.ts`)*
+- [x] Report how often real held-out rows are flagged vs. generated-terrain cells *(`model_card.json` `ood`, `ml/reports/train-report.json`)*
 
 ### D7. Export (Day 5, update as needed)
-- [ ] `model.json`: weights, scaler, OOD parameters, temperature, sized to load quickly (cap trees and depth if the forest is large)
-- [ ] `model_card.json`: class names and order, feature names and ranges, all metrics, ablations, calibration, importance, versions, citation, limitations
-- [ ] Fixture file of sample inputs with expected outputs, for the inference test
-- [ ] Explain function: perturbs each input and returns probability shifts (for Role 2's sensitivity bars)
+- [x] `model.json`: weights, scaler, OOD parameters, temperature, sized to load quickly (cap trees and depth if the forest is large) *(softmax, 2.5 KB; temperature folded into the weights)*
+- [x] `model_card.json`: class names and order, feature names and ranges, all metrics, ablations, calibration, importance, versions, citation, limitations *(limitations are an agent draft and need human review)*
+- [x] Fixture file of sample inputs with expected outputs, for the inference test *(`ml/test/fixtures/inference-fixtures.json`, checked against the app runtime)*
+- [ ] Explain function: perturbs each input and returns probability shifts (for Role 2's sensitivity bars) *(not written by Role 3; Role 2's `engine.explainOne` already does this and is tested on the real model. Decide whether that counts)*
 - [ ] Announce the Worker API to Role 2 on Day 4
 
 ### D8. Documentation (Days 11-12)
-- [ ] `docs/dataset-card.md`: source, citation (Blackard, 1998; DOI 10.24432/C50K5N; CC BY 4.0), attributes, target, size, known limits
+- [x] `docs/dataset-card.md`: source, citation (Blackard, 1998; DOI 10.24432/C50K5N; CC BY 4.0), attributes, target, size, known limits *(agent draft, needs human review)*
 - [ ] `docs/model-card.md`: what it does, how it was selected, metrics, errors, limitations, intended use
-- [ ] README paragraph justifying TypeScript training (shared feature code prevents train/serve drift) and noting the pipeline is small enough to port to Python
+- [x] README paragraph justifying TypeScript training (shared feature code prevents train/serve drift) and noting the pipeline is small enough to port to Python
 - [ ] **Interpretation of results written by humans.** OpenCode may draft the structure; the conclusions must be yours
 
 ### D9. Freeze (Day 12)
@@ -98,7 +98,7 @@ Each item is done only when every checkbox is ticked.
 
 - [ ] Repo cloned, installed, and running on your machine
 - [ ] D1 complete and committed
-- [ ] `docs/notes.md` answers: "Is training in TypeScript going to be a problem?"
+- [x] `docs/notes.md` answers: "Is training in TypeScript going to be a problem?"
 
 This spike is the most important one tonight. If TypeScript training is painful, the team needs to know on Day 1, not Day 6.
 
