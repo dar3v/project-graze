@@ -59,52 +59,52 @@ Hushed, cinematic, lo-fi, terminal-meets-game-launcher. Lots of negative space, 
 Each item is done only when every checkbox is ticked.
 
 ### D1. App shell (Days 1-3)
-- [ ] Svelte routes: Sandbox, Model Report, About / Responsible Use
-- [ ] Consistent layout and navigation
-- [ ] Footer notice on every page: intended use, limitation, and dataset credit (Blackard, 1998; CC BY 4.0)
+- [x] Svelte routes: Sandbox, Model Report, About / Responsible Use
+- [x] Consistent layout and navigation
+- [x] Footer notice on every page: intended use, limitation, and dataset credit (Blackard, 1998; CC BY 4.0)
 
 ### D2. Inference Worker integration (Days 6-7)
-- [ ] Web Worker loads `model.json` and `model_card.json`
-- [ ] No server round trip for predictions
-- [ ] Debounced batch prediction when the terrain changes
-- [ ] Graceful failure if the model files fail to load (visible error, no crash)
-- [ ] A stub that returns clearly labeled fake predictions is acceptable until Role 3 exports the real model, but it must be removed before Day 12
+- [x] Web Worker loads `model.json` and `model_card.json`
+- [x] No server round trip for predictions
+- [x] Debounced batch prediction when the terrain changes
+- [x] Graceful failure if the model files fail to load (visible error, no crash)
+- [ ] A stub that returns clearly labeled fake predictions is acceptable until Role 3 exports the real model, but it must be removed before Day 12 *(stub in place and labeled; still needs removing before Day 12)*
 
 ### D3. Site Probe (Days 3-7)
-- [ ] Panel opens when a cell is clicked (Role 1 emits the selection)
-- [ ] Editable form with every model feature, prefilled from the cell
-- [ ] Validation for missing, non-numeric, and out-of-range values, using ranges from `model_card.json` (nothing hard-coded)
-- [ ] Output: predicted cover type, probability bars, one-sentence explanation
-- [ ] Sensitivity bars (how each input moves the probabilities), provided by Role 3's explain function
-- [ ] Out-of-range and OOD warnings shown in plain language
-- [ ] Validation unit tests
+- [ ] Panel opens when a cell is clicked (Role 1 emits the selection) *(works on the 2D placeholder map; waiting on Role 1's click hookup)*
+- [x] Editable form with every model feature, prefilled from the cell
+- [x] Validation for missing, non-numeric, and out-of-range values, using ranges from `model_card.json` (nothing hard-coded)
+- [x] Output: predicted cover type, probability bars, one-sentence explanation
+- [ ] Sensitivity bars (how each input moves the probabilities), provided by Role 3's explain function *(bars shown using a generic ±10% method; waiting on Role 3's explain function)*
+- [x] Out-of-range and OOD warnings shown in plain language
+- [x] Validation unit tests
 
 ### D4. Model Report page (Days 6-7)
-- [ ] Reads **only** from `model_card.json`; no numbers typed into the page
-- [ ] Shows: dataset summary, split strategy, baseline comparison table, confusion matrix, per-class precision/recall/F1, macro-F1, calibration, ablations, global feature importance, OOD detector summary
-- [ ] A "limitations and what these numbers do not mean" section (text written by humans, see Role 3)
+- [x] Reads **only** from `model_card.json`; no numbers typed into the page
+- [x] Shows: dataset summary, split strategy, baseline comparison table, confusion matrix, per-class precision/recall/F1, macro-F1, calibration, ablations, global feature importance, OOD detector summary
+- [ ] A "limitations and what these numbers do not mean" section (text written by humans, see Role 3) *(section renders from the card; waiting on the human-written text)*
 
 ### D5. Herd simulation (Days 8-9)
-- [ ] Tick-based simulation on the cover map
-- [ ] Rules live in an editable `ecology.json` (food value per cover type, movement, reproduction, starvation)
-- [ ] Rules table shown in the UI and labeled **"assumptions, not model output"**
-- [ ] Population chart (canvas) and event log
-- [ ] Deterministic given a seed (unit test)
+- [x] Tick-based simulation on the cover map
+- [x] Rules live in an editable `ecology.json` (food value per cover type, movement, reproduction, starvation)
+- [x] Rules table shown in the UI and labeled **"assumptions, not model output"**
+- [x] Population chart (canvas) and event log
+- [x] Deterministic given a seed (unit test)
 
 ### D6. Predator and score (Day 10)
-- [ ] Predator rules added to `ecology.json`
-- [ ] Rewilding score defined in `docs/ecology-rules.md`: rewards stable populations and habitat diversity
-- [ ] Score and event log visible in the UI
+- [x] Predator rules added to `ecology.json`
+- [x] Rewilding score defined in `docs/ecology-rules.md`: rewards stable populations and habitat diversity
+- [x] Score and event log visible in the UI
 
 ### D7. Responsible Use page (Day 11)
-- [ ] Covers: privacy, bias, fairness, transparency, explainability, accountability, over-reliance
-- [ ] Each issue paired with a concrete safeguard in this app (OOD flag, limitations notice, report page, no personal data collected)
-- [ ] Draft by OpenCode is fine; the final wording is written and edited by humans
+- [x] Covers: privacy, bias, fairness, transparency, explainability, accountability, over-reliance
+- [x] Each issue paired with a concrete safeguard in this app (OOD flag, limitations notice, report page, no personal data collected)
+- [ ] Draft by OpenCode is fine; the final wording is written and edited by humans *(draft done; human rewrite pending)*
 
 ### D8. Errors, tests, deploy (Days 11-12)
-- [ ] No unhandled errors on bad input, missing model, or empty terrain
-- [ ] Static deploy on Cloudflare Pages, linked in the README
-- [ ] Fallback: local run instructions plus the demo video
+- [x] No unhandled errors on bad input, missing model, or empty terrain
+- [ ] Static deploy on Cloudflare Pages, linked in the README *(not deployed yet; steps are in the README)*
+- [ ] Fallback: local run instructions plus the demo video *(local run instructions done; demo video pending)*
 
 ### Optional (cut by default)
 Hono + D1 for saved or shared worlds. Only if everything above is frozen by Day 10.
@@ -113,11 +113,11 @@ Hono + D1 for saved or shared worlds. Only if everything above is frozen by Day 
 
 ## Tonight (definition of done)
 
-- [ ] Svelte shell with the three routes
-- [ ] Site Probe form with validation (hard-coded ranges are acceptable tonight)
-- [ ] Footer notice and dataset credit
-- [ ] A prediction stub, **clearly labeled as a stub**
-- [ ] Committed and pushed
+- [x] Svelte shell with the three routes
+- [x] Site Probe form with validation (hard-coded ranges are acceptable tonight)
+- [x] Footer notice and dataset credit
+- [x] A prediction stub, **clearly labeled as a stub**
+- [x] Committed and pushed
 
 ---
 
