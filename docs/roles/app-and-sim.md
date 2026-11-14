@@ -108,24 +108,24 @@ Each item is done only when every checkbox is ticked.
 
 ### D9. Walk mode integration
 - [x] Replace the 2D `MapView` with Role 1's `WorldView` on the Sandbox page and pass `onpick`, `herbivores`, `predators`, and `busy`; this also unblocks the unchecked items in ROLE-1 D2, D4, D6, D7
-- [ ] One shared app state store for seed, generation options, water level, brush edits, selected cell, overlay toggles, view mode (orbit or walk), time of day, and quality preset; orbit and walk read the same store and switching modes loses no state *(Role 2 side done: `apps/web/src/lib/state/` (`docs/app-state.md`); brush edits survive leaving the page. Walk can only read it once ROLE-1 D8 exists)*
-- [ ] Mode toggle control in the Sandbox UI, plus a keyboard shortcut listed in the help overlay *(Role 2 side done: Orbit/Walk toggle and `V` are in place and listed in the help overlay; Walk stays disabled until `WORLD_FEATURES.walkMode`)*
-- [ ] Site Probe opens from both a click in orbit view and the "inspect cell underfoot" action in walk mode (ROLE-1 D11), using the same panel and the same selection event, with no duplicate form *(Role 2 side done: one `pick(x, y)` behind `onpick`; walk's E key must call the same `onpick`)*
-- [ ] Brush edits made in orbit view trigger the debounced re-prediction through the inference Worker, and walk mode shows the updated cover with no reload *(Role 2 side done: orbit edits re-predict through the Worker; the walk half needs ROLE-1 D8)*
-- [ ] Loading state while the model loads and while a re-prediction batch runs; failures show a visible message and walk mode stays usable with a "predictions unavailable" HUD state *(Role 2 side done: `predictionState`; with no model the world still renders and can be sculpted (checked in headless Firefox). The walk HUD needs a `prediction` prop from Role 1)*
-- [ ] Layout works on mobile and desktop; Site Probe and Model Report links remain reachable from walk mode without losing the world *(Role 2 side done: checked at 390 px and 1100 px with no horizontal scroll; the world state survives a trip to the Model Report. Walk mode is not built yet)*
+- [x] One shared app state store for seed, generation options, water level, brush edits, selected cell, overlay toggles, view mode (orbit or walk), time of day, and quality preset; orbit and walk read the same store and switching modes loses no state *(`apps/web/src/lib/state/` (`docs/app-state.md`); brush edits survive leaving the page. WorldView takes every prop since 2026-11-15, and orbit and walk read the same live arrays. The terrain itself is cached in `state/worldTerrain.ts`)*
+- [x] Mode toggle control in the Sandbox UI, plus a keyboard shortcut listed in the help overlay *(Orbit/Walk toggle and `V`, listed in the help overlay; `WORLD_FEATURES.walkMode` is true)*
+- [x] Site Probe opens from both a click in orbit view and the "inspect cell underfoot" action in walk mode (ROLE-1 D11), using the same panel and the same selection event, with no duplicate form *(one `pick(x, y)` behind `onpick`; an orbit click and E in walk mode both call it; checked in headless Firefox)*
+- [x] Brush edits made in orbit view trigger the debounced re-prediction through the inference Worker, and walk mode shows the updated cover with no reload *(debounce and stale-result handling are in `model/predictionSession.ts`, tested in `test/prediction.test.ts`; walk mode draws the same live heightmap and cover map, so edits show on foot with no reload)*
+- [x] Loading state while the model loads and while a re-prediction batch runs; failures show a visible message and walk mode stays usable with a "predictions unavailable" HUD state *(`predictionStateOf()` in `model/predictionSession.ts`, passed to WorldView as `prediction`; the walk HUD shows it. With no model the world still renders and can be sculpted (checked in headless Firefox))*
+- [x] Layout works on mobile and desktop; Site Probe and Model Report links remain reachable from walk mode without losing the world *(checked at 390 px and 1100 px with no horizontal scroll. Walk mode at 390 px (2026-11-15, headless Firefox): no horizontal scroll, HUD and exit button present, Model Report and Responsible Use links reachable, and the predicted world is still there after a trip to the Model Report and back)*
 
 ### D10. Sim state for ground-scale viewing
 - [x] Sim exposes positions (and heading) for herbivores and predators through a documented read-only interface that Role 1 renders; no rendering code in `packages/sim/herd/` *(`packages/sim/herd/src/view.ts`: `snapshotPoses`, `interpolateSnapshot`, `POSE_STRIDE`; `docs/app-state.md`)*
 - [x] Simulation tick rate is decoupled from render frame rate, with interpolation so animals move smoothly in walk mode *(fixed 100 ms sim clock; a `requestAnimationFrame` loop interpolates between ticks; reduced motion snaps to ticks. Already smooth in orbit view)*
-- [x] Animals respect water and terrain: placed using the same `getGroundHeight` convention as ROLE-1 D8 (agree and document it, with a unit test on a tiny heightmap) *(convention: Role 1's bilinear `sampleHeight` in cell coordinates; documented in `docs/app-state.md`; tested on a 3×3 heightmap. Role 1 to confirm)*
+- [x] Animals respect water and terrain: placed using the same `getGroundHeight` convention as ROLE-1 D8 (agree and document it, with a unit test on a tiny heightmap) *(convention: Role 1's bilinear `sampleHeight` in cell coordinates; documented in `docs/app-state.md`; tested on a 3×3 heightmap. Role 1 confirmed: walk mode's `getGroundHeight` uses the same `sampleHeight`)*
 - [x] Sim re-seeds deterministically when the world seed changes, and pauses or recovers cleanly when terrain is edited under animals (document the behavior) *(`applyMapChange`; `docs/ecology-rules.md`, "Terrain edits")*
-- [ ] Event log entries shown in walk mode in a compact form (OPTIONAL, cut first) *(cut: needs the walk HUD)*
+- [ ] Event log entries shown in walk mode in a compact form (OPTIONAL, cut first) *(cut. The walk HUD exists now, so this could be built)*
 
 ### D11. Settings, help, and notices
-- [x] One settings panel for quality preset (ROLE-1 D12), time of day and auto-cycle (ROLE-1 D10), overlay toggles, and reduced-motion preference *(`lib/settings/SettingsPanel.svelte`. Reduced motion works now; quality, time and overlays are disabled with a note until WorldView takes the props in `docs/app-state.md`)*
+- [x] One settings panel for quality preset (ROLE-1 D12), time of day and auto-cycle (ROLE-1 D10), overlay toggles, and reduced-motion preference *(`lib/settings/SettingsPanel.svelte`. All controls are live: WorldView takes every prop in `docs/app-state.md`, and every `WORLD_FEATURES` flag is true)*
 - [x] Controls help overlay (ROLE-1 D8, D11) reachable from the UI and from walk mode *(`?` anywhere, plus Help buttons; walk keys listed as planned)*
-- [ ] The persistent notice from ROLE-1 D11 ("predictions are for terrain-like inputs, not real ground truth") is shown in walk mode as well as in the footer *(Role 2 side done: `PREDICTION_NOTICE` is in the footer and under the world. Walk mode needs Role 1's `notice` prop)*
+- [x] The persistent notice from ROLE-1 D11 ("predictions are for terrain-like inputs, not real ground truth") is shown in walk mode as well as in the footer *(`PREDICTION_NOTICE` is in the footer, under the world, and in the walk HUD through WorldView's `notice` prop)*
 - [x] Settings are remembered per viewer using browser storage wrapped in try/catch, and the app works with empty storage *(tested with empty, corrupt, blocked and full storage)*
 
 ### D12. Worlds API (Hono + D1), extended scope, optional, first thing cut
@@ -136,10 +136,10 @@ Each item is done only when every checkbox is ticked.
 - [x] Rate-limit note: verify what the Cloudflare platform offers (Workers Rate Limiting binding / WAF rate limiting rules) and record the finding; do not assume a product *(Workers Rate Limiting binding verified in Cloudflare docs and `cf/config`; `docs/worlds-api.md`)*
 - [x] Worker route, D1 schema, and migration documented in the repo; local dev instructions that work without a deployed D1 *(`src/index.ts`, `migrations/0001_create_worlds.sql`, schema created on first use)*
 - [x] Loading a world saved under a different `modelVersion` re-predicts with the current model and shows a notice *(unit-tested; the UI path was not run against a live Worker)*
-- [ ] Share link or share code format agreed with ROLE-1 D13 and constrained by the hosting rules for the deployed site (verify) *(proposed `#/world/<id>` link plus a 10-character code; works on any static host because fragments never reach the server. Needs Role 1's agreement)*
+- [x] Share link or share code format agreed with ROLE-1 D13 and constrained by the hosting rules for the deployed site (verify) *(`#/world/<id>` link plus a 10-character code; works on any static host because fragments never reach the server. Role 1 adopted it and added an offline code (`graze1.` + compressed world) that needs no server; `docs/worlds-api.md`)*
 - [x] Tests: round-trip save and load, rejected bad payloads, oversized payloads *(`test/worlds-api.test.ts`, `packages/worlds/test/`, `apps/web/test/state.test.ts`)*
 
-**Changes needed in ROLE-1** (from confirming D13): endpoint paths unchanged. ROLE-1 D13's single "version field" becomes `modelVersion` and `schemaVersion`, and `importWorld()` must surface `modelVersion` so the app can re-predict and show a notice on mismatch.
+**Changes needed in ROLE-1** (from confirming D13; done 2026-11-15): endpoint paths unchanged. ROLE-1 D13's single "version field" becomes `modelVersion` and `schemaVersion`, and `importWorld()` must surface `modelVersion` so the app can re-predict and show a notice on mismatch.
 
 ### D13. Content and safeguards for walk mode
 - [x] Update the About / Responsible Use page: walk-mode vegetation is a rendering of predicted classes, not photographs or ground truth *(draft)*
@@ -278,7 +278,7 @@ Decision for you: the background is display-only and doesn't respond to clicks, 
 
 | Role | Needed |
 | --- | --- |
-| Role 1 (World) | Walk mode (D8). Then the WorldView props in `docs/app-state.md`: `viewMode`, `onviewmodechange`, `quality`, `timeOfDay`, `autoCycle`, `overlay`, `showOod`, `reducedMotion`, `notice`, `prediction`. Flip the matching flag in `state/worldFeatures.ts`. Walk's E key calls `onpick`. Confirm the `sampleHeight` ground convention and the `#/world/<id>` share format. |
+| Role 1 (World) | Done (2026-11-15): walk mode, every WorldView prop in `docs/app-state.md`, all `WORLD_FEATURES` flags true, E calls `onpick`, the `sampleHeight` convention and the `#/world/<id>` format confirmed. |
 | Role 3 (ML) | Done: latency is in `docs/notes.md` section 9, and the class order is pinned by `ml/test/contract.test.ts`. Still open: the explain decision (D3 sensitivity bars). |
 
 ---
@@ -299,6 +299,12 @@ Decision for you: the background is display-only and doesn't respond to clicks, 
   repeat `name` across splits, which made Svelte throw `each_key_duplicate`.
 - **Waiting on Role 1.** Most of D9 and part of D11 wait on walk mode (ROLE-1
   D8). The Role 2 side is in place and is listed per item.
+  Follow-up (same day): Role 1 shipped walk mode and every prop. The D9, D11
+  and D12 items that waited on it are ticked; walk mode was checked at 390 px.
+  The prediction scheduling moved out of `Sandbox.svelte` into
+  `model/predictionSession.ts` (tested), and the terrain cache into
+  `state/worldTerrain.ts`, which also fixed saved worlds losing their
+  elevation range.
 - **Checked.** Typecheck, all tests, the web build, and headless Firefox at
   1100 px and 390 px:
   - help, settings, mode toggle
