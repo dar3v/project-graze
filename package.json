@@ -5,11 +5,15 @@
     "dev": "cf dev",
     "build": "cf build",
     "deploy": "cf deploy",
-    "typecheck": "cf workers types && tsc && tsc -p apps/web && tsc -p packages/sim",
-    "test": "node --experimental-strip-types --test packages/features/test/*.test.ts packages/sim/herd/test/*.test.ts apps/web/test/*.test.ts",
+    "typecheck": "cf workers types && tsc && tsc -p apps/web && tsc -p packages/sim && tsc -p ml",
+    "test": "node --experimental-strip-types --test packages/features/test/*.test.ts ml/test/*.test.ts packages/sim/herd/test/*.test.ts apps/web/test/*.test.ts",
     "web:dev": "vite --config apps/web/vite.config.ts",
     "web:build": "vite build --config apps/web/vite.config.ts",
-    "web:preview": "vite preview --config apps/web/vite.config.ts"
+    "web:preview": "vite preview --config apps/web/vite.config.ts",
+    "ml:fetch": "node --experimental-strip-types ml/src/fetch.ts",
+    "ml:explore": "node --experimental-strip-types ml/src/explore.ts",
+    "ml:train": "node --experimental-strip-types ml/src/fetch.ts && node --experimental-strip-types ml/src/explore.ts && node --experimental-strip-types ml/src/train.ts",
+    "ml:evaluate-final": "node --experimental-strip-types ml/src/evaluate-final.ts"
   },
   "dependencies": {
     "hono": "5.0.0-rc.1",

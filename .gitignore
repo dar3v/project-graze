@@ -32,3 +32,6 @@ lerna-debug.log*
 
 # misc
 .DS_Store
+
+# ml data (downloaded by `pnpm ml:fetch`)
+ml/data/

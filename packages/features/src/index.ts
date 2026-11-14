@@ -15,3 +15,17 @@ export type {
   FeatureRanges,
   TerrainSample,
 } from './features.ts'
+
+export {
+  SUN,
+  SUN_ASTRONOMICAL,
+  STUDY_LATITUDE_DEG,
+  SOLSTICE_DECLINATION_DEG,
+  solarPosition,
+  hillshade,
+  slopeAspect,
+  distanceToWaterCells,
+  heightmapToSamples,
+} from './terrain.ts'
+
+export type { SunPosition, TerrainInputOptions, TerrainInputs } from './terrain.ts'

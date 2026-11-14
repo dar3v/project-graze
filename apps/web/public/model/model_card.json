@@ -1,0 +1,2050 @@
+{
+  "schemaVersion": 1,
+  "model": {
+    "name": "Project Graze habitat classifier",
+    "type": "softmax",
+    "version": "0.1.0-dev",
+    "trainedAt": "2026-11-14",
+    "seed": 42,
+    "selectionRule": "Highest mean macro-F1 over the 4 leave-one-wilderness-area-out folds; a simpler model within 0.01 macro-F1 of the best wins (softmax < MLP < forest). Written before any LOAO result (docs/notes.md section 3).",
+    "config": {
+      "hidden": [],
+      "epochs": 5,
+      "batchSize": 256,
+      "learningRate": 0.01,
+      "l2": 0.00001,
+      "classWeighting": "sqrt-balanced",
+      "label": "sqrt-balanced"
+    },
+    "frozen": false
+  },
+  "classes": [
+    "Spruce/Fir",
+    "Lodgepole Pine",
+    "Ponderosa Pine",
+    "Cottonwood/Willow",
+    "Aspen",
+    "Douglas-fir",
+    "Krummholz"
+  ],
+  "features": [
+    "elevation",
+    "slope",
+    "aspectSin",
+    "aspectCos",
+    "hillshade9am",
+    "hillshadeNoon",
+    "hillshade3pm",
+    "horizontalDistanceToWater",
+    "verticalDistanceToWater"
+  ],
+  "inputs": [
+    {
+      "name": "elevation",
+      "label": "Elevation",
+      "unit": "m",
+      "min": 1859,
+      "max": 3858
+    },
+    {
+      "name": "slope",
+      "label": "Slope",
+      "unit": "°",
+      "min": 0,
+      "max": 66,
+      "hardMin": 0,
+      "hardMax": 90
+    },
+    {
+      "name": "aspectDegrees",
+      "label": "Aspect",
+      "unit": "° from north",
+      "min": 0,
+      "max": 360,
+      "hardMin": 0,
+      "hardMax": 360
+    },
+    {
+      "name": "hillshade9am",
+      "label": "Hillshade 9am",
+      "unit": "0–255",
+      "min": 0,
+      "max": 254,
+      "hardMin": 0,
+      "hardMax": 255
+    },
+    {
+      "name": "hillshadeNoon",
+      "label": "Hillshade noon",
+      "unit": "0–255",
+      "min": 0,
+      "max": 254,
+      "hardMin": 0,
+      "hardMax": 255
+    },
+    {
+      "name": "hillshade3pm",
+      "label": "Hillshade 3pm",
+      "unit": "0–255",
+      "min": 0,
+      "max": 254,
+      "hardMin": 0,
+      "hardMax": 255
+    },
+    {
+      "name": "horizontalDistanceToWater",
+      "label": "Horizontal distance to water",
+      "unit": "m",
+      "min": 0,
+      "max": 1397,
+      "hardMin": 0
+    },
+    {
+      "name": "verticalDistanceToWater",
+      "label": "Vertical distance to water",
+      "unit": "m",
+      "min": -173,
+      "max": 601
+    }
+  ],
+  "dataset": {
+    "name": "Covertype (UCI Machine Learning Repository)",
+    "citation": "Blackard, J. (1998). Covertype [Dataset]. UCI Machine Learning Repository. https://doi.org/10.24432/C50K5N",
+    "doi": "10.24432/C50K5N",
+    "license": "CC BY 4.0",
+    "url": "https://archive.ics.uci.edu/dataset/31/covertype",
+    "instances": 581012,
+    "region": "Four wilderness areas of the Roosevelt National Forest, northern Colorado, USA (30 m x 30 m cells)",
+    "featuresUsed": [
+      "elevation",
+      "slope",
+      "aspectSin",
+      "aspectCos",
+      "hillshade9am",
+      "hillshadeNoon",
+      "hillshade3pm",
+      "horizontalDistanceToWater",
+      "verticalDistanceToWater"
+    ],
+    "featuresExcluded": [
+      "Soil type (40 indicators)",
+      "Wilderness area (4 indicators)",
+      "Horizontal distance to roadways",
+      "Horizontal distance to fire points"
+    ],
+    "classCounts": [
+      211840,
+      283301,
+      35754,
+      2747,
+      9493,
+      17367,
+      20510
+    ],
+    "preparation": [
+      "Downloaded from UCI and verified by SHA-256 (ml:fetch).",
+      "Locked final test set: stratified 10% of all rows (58101), never used before the model freeze.",
+      "Model inputs built with @graze/features sampleToVector, the same function the app uses (aspect -> sin/cos).",
+      "Standardization (networks) and the OOD detector fit on training rows only; temperature and OOD threshold on a 15% inner holdout of the training rows.",
+      "Flexible models trained on a uniform subsample of at most 150000 training rows per fold."
+    ]
+  },
+  "split": {
+    "strategy": "Leave-one-wilderness-area-out (selection) + stratified random split (optimistic reference)",
+    "description": "Random splits put neighbouring, correlated 30 m cells on both sides, so they overstate accuracy. Holding out a whole wilderness area tests generalization to a new landscape, which is what the sandbox asks of the model.",
+    "details": [
+      "Dev set: 522911 rows; locked test set: 58101 rows.",
+      "Random split of dev: 418329 train / 104582 validation (stratified).",
+      "LOAO fold, held-out Rawah: 288134 train / 234777 validation.",
+      "LOAO fold, held-out Neota: 496099 train / 26812 validation.",
+      "LOAO fold, held-out Comanche Peak: 294825 train / 228086 validation.",
+      "LOAO fold, held-out Cache la Poudre: 489675 train / 33236 validation.",
+      "Cottonwood/Willow occurs only in Cache la Poudre, so it is unseen in training when that area is held out."
+    ]
+  },
+  "baselines": [
+    {
+      "name": "Majority class",
+      "accuracy": 0.35889205638979094,
+      "macroF1": 0.12030388220412082,
+      "selected": false,
+      "notes": "Mean over LOAO folds (std 0.054). Random split: macro-F1 0.094, accuracy 0.488."
+    },
+    {
+      "name": "Elevation-band rule",
+      "accuracy": 0.6247348079659031,
+      "macroF1": 0.3554111229919724,
+      "selected": false,
+      "notes": "Mean over LOAO folds (std 0.048). Random split: macro-F1 0.346, accuracy 0.675."
+    },
+    {
+      "name": "Softmax regression",
+      "accuracy": 0.595501964624302,
+      "macroF1": 0.38461234390512544,
+      "selected": true,
+      "notes": "Mean over LOAO folds (std 0.084). Random split: macro-F1 0.483, accuracy 0.682."
+    },
+    {
+      "name": "Small MLP",
+      "accuracy": 0.5704859275010175,
+      "macroF1": 0.3835046252968685,
+      "selected": false,
+      "notes": "Mean over LOAO folds (std 0.080). Random split: macro-F1 0.581, accuracy 0.695."
+    },
+    {
+      "name": "Random forest",
+      "accuracy": 0.5756904266007039,
+      "macroF1": 0.3902799062254313,
+      "selected": false,
+      "notes": "Mean over LOAO folds (std 0.070). Random split: macro-F1 0.604, accuracy 0.720."
+    }
+  ],
+  "evaluations": [
+    {
+      "name": "Softmax regression",
+      "split": "Random split (optimistic)",
+      "accuracy": 0.6821632785756632,
+      "macroF1": 0.4829646833184936,
+      "logLoss": 0.7578400392266901,
+      "confusionMatrix": [
+        [
+          26424,
+          9567,
+          11,
+          0,
+          9,
+          18,
+          2102
+        ],
+        [
+          11129,
+          37067,
+          1255,
+          2,
+          435,
+          963,
+          143
+        ],
+        [
+          0,
+          729,
+          4210,
+          132,
+          87,
+          1278,
+          0
+        ],
+        [
+          0,
+          0,
+          251,
+          117,
+          0,
+          126,
+          0
+        ],
+        [
+          4,
+          1460,
+          43,
+          0,
+          167,
+          35,
+          0
+        ],
+        [
+          0,
+          619,
+          1182,
+          37,
+          17,
+          1271,
+          0
+        ],
+        [
+          1563,
+          43,
+          0,
+          0,
+          0,
+          0,
+          2086
+        ]
+      ],
+      "perClass": [
+        {
+          "precision": 0.6754601226993865,
+          "recall": 0.6929794655267367,
+          "f1": 0.684107649091921,
+          "support": 38131
+        },
+        {
+          "precision": 0.7490552692735172,
+          "recall": 0.7268894379730949,
+          "f1": 0.7378059096925725,
+          "support": 50994
+        },
+        {
+          "precision": 0.6055811277330264,
+          "recall": 0.6541330018645121,
+          "f1": 0.6289214221691066,
+          "support": 6436
+        },
+        {
+          "precision": 0.40625,
+          "recall": 0.23684210526315788,
+          "f1": 0.29923273657289007,
+          "support": 494
+        },
+        {
+          "precision": 0.23356643356643356,
+          "recall": 0.09771796372147455,
+          "f1": 0.1377887788778878,
+          "support": 1709
+        },
+        {
+          "precision": 0.3443511243565429,
+          "recall": 0.4065898912348049,
+          "f1": 0.3728913011588675,
+          "support": 3126
+        },
+        {
+          "precision": 0.48164396213345645,
+          "recall": 0.5650054171180932,
+          "f1": 0.5200049856662097,
+          "support": 3692
+        }
+      ]
+    },
+    {
+      "name": "Softmax regression",
+      "split": "Leave-one-area-out (pooled over 4 folds)",
+      "accuracy": 0.6419295061683536,
+      "macroF1": 0.37030767992684793,
+      "logLoss": null,
+      "confusionMatrix": [
+        [
+          129065,
+          51283,
+          77,
+          0,
+          411,
+          105,
+          9715
+        ],
+        [
+          56490,
+          180050,
+          8237,
+          117,
+          3623,
+          5439,
+          1015
+        ],
+        [
+          0,
+          8083,
+          12210,
+          1005,
+          701,
+          10180,
+          0
+        ],
+        [
+          0,
+          0,
+          1668,
+          0,
+          0,
+          804,
+          0
+        ],
+        [
+          79,
+          7887,
+          108,
+          0,
+          365,
+          105,
+          0
+        ],
+        [
+          0,
+          4276,
+          3687,
+          536,
+          418,
+          6713,
+          0
+        ],
+        [
+          10827,
+          363,
+          0,
+          0,
+          0,
+          0,
+          7269
+        ]
+      ],
+      "perClass": [
+        {
+          "precision": 0.65694972539079,
+          "recall": 0.6769522071164821,
+          "f1": 0.6668009929814501,
+          "support": 190656
+        },
+        {
+          "precision": 0.7146486096006224,
+          "recall": 0.7061587396213687,
+          "f1": 0.7103783094929504,
+          "support": 254971
+        },
+        {
+          "precision": 0.46985030977026976,
+          "recall": 0.37944000745828027,
+          "f1": 0.4198328920675309,
+          "support": 32179
+        },
+        {
+          "precision": 0,
+          "recall": 0,
+          "f1": 0,
+          "support": 2472
+        },
+        {
+          "precision": 0.06614715476621964,
+          "recall": 0.04272003745318352,
+          "f1": 0.05191295690513441,
+          "support": 8544
+        },
+        {
+          "precision": 0.28754390473742825,
+          "recall": 0.42949456174024314,
+          "f1": 0.3444683908045977,
+          "support": 15630
+        },
+        {
+          "precision": 0.40385576976498694,
+          "recall": 0.3937916463513733,
+          "f1": 0.39876021723627186,
+          "support": 18459
+        }
+      ]
+    },
+    {
+      "name": "Softmax regression",
+      "split": "Held-out area: Rawah",
+      "accuracy": 0.6846709856587315,
+      "macroF1": 0.43093611291369377,
+      "logLoss": 0.7665371445877781,
+      "confusionMatrix": [
+        [
+          62874,
+          25921,
+          77,
+          0,
+          5,
+          100,
+          6174
+        ],
+        [
+          27412,
+          95889,
+          5261,
+          0,
+          86,
+          2798,
+          190
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          79,
+          3109,
+          108,
+          0,
+          3,
+          103,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          2606,
+          3,
+          0,
+          0,
+          0,
+          0,
+          1979
+        ]
+      ],
+      "perClass": [
+        {
+          "precision": 0.6762753977046606,
+          "recall": 0.6607812844846612,
+          "f1": 0.6684385664621894,
+          "support": 95151
+        },
+        {
+          "precision": 0.7675909767695042,
+          "recall": 0.7284405481783098,
+          "f1": 0.7475034884899321,
+          "support": 131636
+        },
+        {
+          "precision": 0,
+          "recall": 0,
+          "f1": 0,
+          "support": 0
+        },
+        {
+          "precision": 0,
+          "recall": 0,
+          "f1": 0,
+          "support": 0
+        },
+        {
+          "precision": 0.031914893617021274,
+          "recall": 0.0008818342151675485,
+          "f1": 0.0017162471395881006,
+          "support": 3402
+        },
+        {
+          "precision": 0,
+          "recall": 0,
+          "f1": 0,
+          "support": 0
+        },
+        {
+          "precision": 0.2372048423828359,
+          "recall": 0.43134263295553615,
+          "f1": 0.3060861495630655,
+          "support": 4588
+        }
+      ]
+    },
+    {
+      "name": "Softmax regression",
+      "split": "Held-out area: Neota",
+      "accuracy": 0.6096523944502461,
+      "macroF1": 0.470037431543723,
+      "logLoss": 0.9927220761256161,
+      "confusionMatrix": [
+        [
+          13678,
+          221,
+          0,
+          0,
+          0,
+          0,
+          2786
+        ],
+        [
+          6527,
+          708,
+          0,
+          0,
+          0,
+          0,
+          805
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          127,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1960
+        ]
+      ],
+      "perClass": [
+        {
+          "precision": 0.672732638205784,
+          "recall": 0.8197782439316752,
+          "f1": 0.7390118053867142,
+          "support": 16685
+        },
+        {
+          "precision": 0.7621097954790097,
+          "recall": 0.0880597014925373,
+          "f1": 0.157877132344743,
+          "support": 8040
+        },
+        {
+          "precision": 0,
+          "recall": 0,
+          "f1": 0,
+          "support": 0
+        },
+        {
+          "precision": 0,
+          "recall": 0,
+          "f1": 0,
+          "support": 0
+        },
+        {
+          "precision": 0,
+          "recall": 0,
+          "f1": 0,
+          "support": 0
+        },
+        {
+          "precision": 0,
+          "recall": 0,
+          "f1": 0,
+          "support": 0
+        },
+        {
+          "precision": 0.3530895334174023,
+          "recall": 0.9391471011020603,
+          "f1": 0.513223356899712,
+          "support": 2087
+        }
+      ]
+    },
+    {
+      "name": "Softmax regression",
+      "split": "Held-out area: Comanche Peak",
+      "accuracy": 0.6283331725752567,
+      "macroF1": 0.38905704031181093,
+      "logLoss": 0.9134826977581675,
+      "confusionMatrix": [
+        [
+          52513,
+          25141,
+          0,
+          0,
+          406,
+          5,
+          755
+        ],
+        [
+          22551,
+          83437,
+          2254,
+          117,
+          3537,
+          674,
+          20
+        ],
+        [
+          0,
+          8075,
+          2803,
+          1005,
+          700,
+          292,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          4778,
+          0,
+          0,
+          362,
+          2,
+          0
+        ],
+        [
+          0,
+          4276,
+          776,
+          536,
+          418,
+          869,
+          0
+        ],
+        [
+          8094,
+          360,
+          0,
+          0,
+          0,
+          0,
+          3330
+        ]
+      ],
+      "perClass": [
+        {
+          "precision": 0.6314846436903244,
+          "recall": 0.666239533113423,
+          "f1": 0.6483966958475843,
+          "support": 78820
+        },
+        {
+          "precision": 0.6618464784598665,
+          "recall": 0.7410693667288392,
+          "f1": 0.6992210578361413,
+          "support": 112590
+        },
+        {
+          "precision": 0.4805417452425853,
+          "recall": 0.21770873786407766,
+          "f1": 0.29965790036348083,
+          "support": 12875
+        },
+        {
+          "precision": 0,
+          "recall": 0,
+          "f1": 0,
+          "support": 0
+        },
+        {
+          "precision": 0.06675271989673612,
+          "recall": 0.07040062232594321,
+          "f1": 0.06852815901561761,
+          "support": 5142
+        },
+        {
+          "precision": 0.4717698154180239,
+          "recall": 0.1264,
+          "f1": 0.1993805208213835,
+          "support": 6875
+        },
+        {
+          "precision": 0.8112058465286236,
+          "recall": 0.28258655804480654,
+          "f1": 0.4191579079866575,
+          "support": 11784
+        }
+      ]
+    },
+    {
+      "name": "Softmax regression",
+      "split": "Held-out area: Cache la Poudre",
+      "accuracy": 0.4593513058129739,
+      "macroF1": 0.248418790851274,
+      "logLoss": 2.4484470656379442,
+      "confusionMatrix": [
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          16,
+          722,
+          0,
+          0,
+          1967,
+          0
+        ],
+        [
+          0,
+          8,
+          9407,
+          0,
+          1,
+          9888,
+          0
+        ],
+        [
+          0,
+          0,
+          1668,
+          0,
+          0,
+          804,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          2911,
+          0,
+          0,
+          5844,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "perClass": [
+        {
+          "precision": 0,
+          "recall": 0,
+          "f1": 0,
+          "support": 0
+        },
+        {
+          "precision": 0.6666666666666666,
+          "recall": 0.005914972273567467,
+          "f1": 0.011725906925613778,
+          "support": 2705
+        },
+        {
+          "precision": 0.6395838999184118,
+          "recall": 0.48730832987981765,
+          "f1": 0.5531577090438669,
+          "support": 19304
+        },
+        {
+          "precision": 0,
+          "recall": 0,
+          "f1": 0,
+          "support": 2472
+        },
+        {
+          "precision": 0,
+          "recall": 0,
+          "f1": 0,
+          "support": 0
+        },
+        {
+          "precision": 0.31584067448521863,
+          "recall": 0.6675042832667047,
+          "f1": 0.4287915474356153,
+          "support": 8755
+        },
+        {
+          "precision": 0,
+          "recall": 0,
+          "f1": 0,
+          "support": 0
+        }
+      ]
+    },
+    {
+      "name": "Majority class",
+      "split": "Random split (optimistic)",
+      "accuracy": 0.4875982482645197,
+      "macroF1": 0.09365014067538878,
+      "logLoss": 1.2051577428727163,
+      "confusionMatrix": [
+        [
+          0,
+          38131,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          50994,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          6436,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          494,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          1709,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          3126,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          3692,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "perClass": [
+        {
+          "precision": 0,
+          "recall": 0,
+          "f1": 0,
+          "support": 38131
+        },
+        {
+          "precision": 0.4875982482645197,
+          "recall": 1,
+          "f1": 0.6555509847277214,
+          "support": 50994
+        },
+        {
+          "precision": 0,
+          "recall": 0,
+          "f1": 0,
+          "support": 6436
+        },
+        {
+          "precision": 0,
+          "recall": 0,
+          "f1": 0,
+          "support": 494
+        },
+        {
+          "precision": 0,
+          "recall": 0,
+          "f1": 0,
+          "support": 1709
+        },
+        {
+          "precision": 0,
+          "recall": 0,
+          "f1": 0,
+          "support": 3126
+        },
+        {
+          "precision": 0,
+          "recall": 0,
+          "f1": 0,
+          "support": 3692
+        }
+      ]
+    },
+    {
+      "name": "Majority class",
+      "split": "Leave-one-area-out (pooled over 4 folds)",
+      "accuracy": 0.48759922816693474,
+      "macroF1": 0.09365026719072704,
+      "logLoss": null,
+      "confusionMatrix": [
+        [
+          0,
+          190656,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          254971,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          32179,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          2472,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          8544,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          15630,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          18459,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "perClass": [
+        {
+          "precision": 0,
+          "recall": 0,
+          "f1": 0,
+          "support": 190656
+        },
+        {
+          "precision": 0.48759922816693474,
+          "recall": 1,
+          "f1": 0.6555518703350893,
+          "support": 254971
+        },
+        {
+          "precision": 0,
+          "recall": 0,
+          "f1": 0,
+          "support": 32179
+        },
+        {
+          "precision": 0,
+          "recall": 0,
+          "f1": 0,
+          "support": 2472
+        },
+        {
+          "precision": 0,
+          "recall": 0,
+          "f1": 0,
+          "support": 8544
+        },
+        {
+          "precision": 0,
+          "recall": 0,
+          "f1": 0,
+          "support": 15630
+        },
+        {
+          "precision": 0,
+          "recall": 0,
+          "f1": 0,
+          "support": 18459
+        }
+      ]
+    },
+    {
+      "name": "Elevation-band rule",
+      "split": "Random split (optimistic)",
+      "accuracy": 0.6750205580310187,
+      "macroF1": 0.3458691071398529,
+      "logLoss": 0.7499392833434764,
+      "confusionMatrix": [
+        [
+          26717,
+          10673,
+          2,
+          0,
+          0,
+          0,
+          739
+        ],
+        [
+          12008,
+          38519,
+          456,
+          0,
+          0,
+          0,
+          11
+        ],
+        [
+          0,
+          2056,
+          4343,
+          0,
+          0,
+          37,
+          0
+        ],
+        [
+          0,
+          0,
+          494,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          1691,
+          18,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          1014,
+          2067,
+          0,
+          0,
+          45,
+          0
+        ],
+        [
+          2700,
+          21,
+          0,
+          0,
+          0,
+          0,
+          971
+        ]
+      ],
+      "perClass": [
+        {
+          "precision": 0.6449487024743512,
+          "recall": 0.7006635021373685,
+          "f1": 0.6716526723314395,
+          "support": 38131
+        },
+        {
+          "precision": 0.7136584281320636,
+          "recall": 0.7553633760834608,
+          "f1": 0.7339189086197697,
+          "support": 50994
+        },
+        {
+          "precision": 0.5884823848238483,
+          "recall": 0.6747980111870727,
+          "f1": 0.6286913723219457,
+          "support": 6436
+        },
+        {
+          "precision": 0,
+          "recall": 0,
+          "f1": 0,
+          "support": 494
+        },
+        {
+          "precision": 0,
+          "recall": 0,
+          "f1": 0,
+          "support": 1709
+        },
+        {
+          "precision": 0.5487804878048781,
+          "recall": 0.014395393474088292,
+          "f1": 0.028054862842892773,
+          "support": 3126
+        },
+        {
+          "precision": 0.5642068564787914,
+          "recall": 0.2630010834236186,
+          "f1": 0.35876593386292255,
+          "support": 3692
+        }
+      ]
+    },
+    {
+      "name": "Elevation-band rule",
+      "split": "Leave-one-area-out (pooled over 4 folds)",
+      "accuracy": 0.653501265033629,
+      "macroF1": 0.31086769351732924,
+      "logLoss": null,
+      "confusionMatrix": [
+        [
+          122465,
+          64486,
+          86,
+          0,
+          0,
+          0,
+          3619
+        ],
+        [
+          52770,
+          197610,
+          4393,
+          0,
+          0,
+          154,
+          44
+        ],
+        [
+          0,
+          10565,
+          19093,
+          0,
+          0,
+          2521,
+          0
+        ],
+        [
+          0,
+          4,
+          2271,
+          0,
+          0,
+          197,
+          0
+        ],
+        [
+          0,
+          8394,
+          150,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          5148,
+          9142,
+          0,
+          0,
+          1340,
+          0
+        ],
+        [
+          17168,
+          76,
+          0,
+          0,
+          0,
+          0,
+          1215
+        ]
+      ],
+      "perClass": [
+        {
+          "precision": 0.6365025493365488,
+          "recall": 0.6423348858677409,
+          "f1": 0.6394054179643345,
+          "support": 190656
+        },
+        {
+          "precision": 0.6902610354090184,
+          "recall": 0.7750293170595872,
+          "f1": 0.7301932179715994,
+          "support": 254971
+        },
+        {
+          "precision": 0.5434182439163228,
+          "recall": 0.593337269647907,
+          "f1": 0.5672816947440354,
+          "support": 32179
+        },
+        {
+          "precision": 0,
+          "recall": 0,
+          "f1": 0,
+          "support": 2472
+        },
+        {
+          "precision": 0,
+          "recall": 0,
+          "f1": 0,
+          "support": 8544
+        },
+        {
+          "precision": 0.3181386514719848,
+          "recall": 0.08573256557901472,
+          "f1": 0.1350670295333132,
+          "support": 15630
+        },
+        {
+          "precision": 0.24907749077490776,
+          "recall": 0.06582155046318869,
+          "f1": 0.1041264944080216,
+          "support": 18459
+        }
+      ]
+    },
+    {
+      "name": "Small MLP",
+      "split": "Random split (optimistic)",
+      "accuracy": 0.6946128396856055,
+      "macroF1": 0.5810384350509924,
+      "logLoss": 0.6938476563369542,
+      "confusionMatrix": [
+        [
+          26449,
+          8881,
+          17,
+          0,
+          255,
+          38,
+          2491
+        ],
+        [
+          10169,
+          36349,
+          1273,
+          9,
+          1432,
+          1407,
+          355
+        ],
+        [
+          0,
+          486,
+          4362,
+          318,
+          44,
+          1226,
+          0
+        ],
+        [
+          0,
+          0,
+          72,
+          393,
+          0,
+          29,
+          0
+        ],
+        [
+          19,
+          916,
+          66,
+          0,
+          676,
+          32,
+          0
+        ],
+        [
+          0,
+          412,
+          951,
+          88,
+          19,
+          1656,
+          0
+        ],
+        [
+          921,
+          11,
+          0,
+          0,
+          1,
+          0,
+          2759
+        ]
+      ],
+      "perClass": [
+        {
+          "precision": 0.7042174769689546,
+          "recall": 0.6936351000498282,
+          "f1": 0.6988862318170408,
+          "support": 38131
+        },
+        {
+          "precision": 0.7724790139198809,
+          "recall": 0.7128093501196219,
+          "f1": 0.7414456037287478,
+          "support": 50994
+        },
+        {
+          "precision": 0.6470850022251892,
+          "recall": 0.6777501553760099,
+          "f1": 0.6620626849814071,
+          "support": 6436
+        },
+        {
+          "precision": 0.4863861386138614,
+          "recall": 0.7955465587044535,
+          "f1": 0.6036866359447004,
+          "support": 494
+        },
+        {
+          "precision": 0.27853316852080756,
+          "recall": 0.39555295494441195,
+          "f1": 0.3268858800773694,
+          "support": 1709
+        },
+        {
+          "precision": 0.37739288969917956,
+          "recall": 0.5297504798464492,
+          "f1": 0.44077721586372104,
+          "support": 3126
+        },
+        {
+          "precision": 0.4922390722569135,
+          "recall": 0.7472914409534128,
+          "f1": 0.5935247929439604,
+          "support": 3692
+        }
+      ]
+    },
+    {
+      "name": "Small MLP",
+      "split": "Leave-one-area-out (pooled over 4 folds)",
+      "accuracy": 0.6059348531585681,
+      "macroF1": 0.3617476316762906,
+      "logLoss": null,
+      "confusionMatrix": [
+        [
+          126768,
+          48439,
+          137,
+          0,
+          1932,
+          209,
+          13171
+        ],
+        [
+          60374,
+          161330,
+          8855,
+          25,
+          16075,
+          6483,
+          1829
+        ],
+        [
+          0,
+          8401,
+          13335,
+          42,
+          784,
+          9617,
+          0
+        ],
+        [
+          0,
+          0,
+          1271,
+          0,
+          1,
+          1200,
+          0
+        ],
+        [
+          173,
+          7039,
+          192,
+          0,
+          1027,
+          113,
+          0
+        ],
+        [
+          0,
+          4884,
+          5030,
+          75,
+          167,
+          5474,
+          0
+        ],
+        [
+          9395,
+          148,
+          0,
+          0,
+          0,
+          0,
+          8916
+        ]
+      ],
+      "perClass": [
+        {
+          "precision": 0.6444410553606832,
+          "recall": 0.6649043303121853,
+          "f1": 0.6545127863570886,
+          "support": 190656
+        },
+        {
+          "precision": 0.7007005702720194,
+          "recall": 0.6327386251769809,
+          "f1": 0.664987675490301,
+          "support": 254971
+        },
+        {
+          "precision": 0.4626995142262318,
+          "recall": 0.4144006961061562,
+          "f1": 0.4372202822997099,
+          "support": 32179
+        },
+        {
+          "precision": 0,
+          "recall": 0,
+          "f1": 0,
+          "support": 2472
+        },
+        {
+          "precision": 0.05138597017912539,
+          "recall": 0.12020131086142322,
+          "f1": 0.07199439186820891,
+          "support": 8544
+        },
+        {
+          "precision": 0.23701073779009352,
+          "recall": 0.35022392834293026,
+          "f1": 0.28270412642669007,
+          "support": 15630
+        },
+        {
+          "precision": 0.3728048168590065,
+          "recall": 0.4830164147570291,
+          "f1": 0.42081415929203536,
+          "support": 18459
+        }
+      ]
+    },
+    {
+      "name": "Random forest",
+      "split": "Random split (optimistic)",
+      "accuracy": 0.7195597712799525,
+      "macroF1": 0.604003648164514,
+      "logLoss": 0.6476868915932349,
+      "confusionMatrix": [
+        [
+          27092,
+          9106,
+          12,
+          0,
+          84,
+          37,
+          1800
+        ],
+        [
+          9724,
+          38498,
+          1090,
+          5,
+          575,
+          849,
+          253
+        ],
+        [
+          0,
+          611,
+          4526,
+          252,
+          25,
+          1022,
+          0
+        ],
+        [
+          0,
+          0,
+          101,
+          359,
+          0,
+          34,
+          0
+        ],
+        [
+          22,
+          1148,
+          40,
+          0,
+          472,
+          27,
+          0
+        ],
+        [
+          1,
+          481,
+          939,
+          60,
+          9,
+          1636,
+          0
+        ],
+        [
+          999,
+          22,
+          0,
+          0,
+          1,
+          0,
+          2670
+        ]
+      ],
+      "perClass": [
+        {
+          "precision": 0.7159997885723347,
+          "recall": 0.7104980199837403,
+          "f1": 0.7132382945675211,
+          "support": 38131
+        },
+        {
+          "precision": 0.7720290378213612,
+          "recall": 0.754951562928972,
+          "f1": 0.7633948046797541,
+          "support": 50994
+        },
+        {
+          "precision": 0.6747167561121049,
+          "recall": 0.7032318210068366,
+          "f1": 0.6886792452830188,
+          "support": 6436
+        },
+        {
+          "precision": 0.5310650887573964,
+          "recall": 0.7267206477732794,
+          "f1": 0.6136752136752138,
+          "support": 494
+        },
+        {
+          "precision": 0.40480274442538594,
+          "recall": 0.2761849034523113,
+          "f1": 0.3283478260869565,
+          "support": 1709
+        },
+        {
+          "precision": 0.4538141470180305,
+          "recall": 0.5233525271912988,
+          "f1": 0.4861090476897935,
+          "support": 3126
+        },
+        {
+          "precision": 0.5653186533982638,
+          "recall": 0.7231852654387866,
+          "f1": 0.6345811051693404,
+          "support": 3692
+        }
+      ]
+    },
+    {
+      "name": "Random forest",
+      "split": "Leave-one-area-out (pooled over 4 folds)",
+      "accuracy": 0.6247487622176623,
+      "macroF1": 0.36410280729487626,
+      "logLoss": null,
+      "confusionMatrix": [
+        [
+          129713,
+          49304,
+          121,
+          0,
+          742,
+          136,
+          10640
+        ],
+        [
+          61987,
+          170873,
+          8787,
+          52,
+          7135,
+          4864,
+          1273
+        ],
+        [
+          0,
+          10668,
+          11271,
+          82,
+          541,
+          9617,
+          0
+        ],
+        [
+          0,
+          15,
+          1272,
+          0,
+          0,
+          1185,
+          0
+        ],
+        [
+          182,
+          7513,
+          180,
+          0,
+          559,
+          110,
+          0
+        ],
+        [
+          0,
+          5062,
+          3833,
+          296,
+          191,
+          6248,
+          0
+        ],
+        [
+          10218,
+          217,
+          0,
+          0,
+          0,
+          0,
+          8024
+        ]
+      ],
+      "perClass": [
+        {
+          "precision": 0.641825828797625,
+          "recall": 0.6803509986572676,
+          "f1": 0.6605271466253858,
+          "support": 190656
+        },
+        {
+          "precision": 0.701299394217983,
+          "recall": 0.6701664110820447,
+          "f1": 0.6853795352400511,
+          "support": 254971
+        },
+        {
+          "precision": 0.4426248821866164,
+          "recall": 0.35025948600018647,
+          "f1": 0.39106222785073647,
+          "support": 32179
+        },
+        {
+          "precision": 0,
+          "recall": 0,
+          "f1": 0,
+          "support": 2472
+        },
+        {
+          "precision": 0.060972949389179756,
+          "recall": 0.06542602996254682,
+          "f1": 0.06312104787714544,
+          "support": 8544
+        },
+        {
+          "precision": 0.2819494584837545,
+          "recall": 0.399744081893794,
+          "f1": 0.33066948928287904,
+          "support": 15630
+        },
+        {
+          "precision": 0.40246777348648244,
+          "recall": 0.4346931036350832,
+          "f1": 0.4179602041879363,
+          "support": 18459
+        }
+      ]
+    }
+  ],
+  "calibration": {
+    "method": "Temperature scaling fitted on the inner holdout and folded into the last layer; bins are on the random-split validation",
+    "temperature": 0.6898505605749318,
+    "eceBefore": 0.10035690734406327,
+    "ece": 0.014154331509451114,
+    "bins": [
+      {
+        "lower": 0.2,
+        "upper": 0.3,
+        "confidence": 0.2807910108744209,
+        "accuracy": 0.291044776119403,
+        "count": 134
+      },
+      {
+        "lower": 0.3,
+        "upper": 0.4,
+        "confidence": 0.3624761592878952,
+        "accuracy": 0.43029917250159133,
+        "count": 1571
+      },
+      {
+        "lower": 0.4,
+        "upper": 0.5,
+        "confidence": 0.46628129852125616,
+        "accuracy": 0.4988551366203633,
+        "count": 6551
+      },
+      {
+        "lower": 0.5,
+        "upper": 0.6,
+        "confidence": 0.5505055627128133,
+        "accuracy": 0.5603678702487201,
+        "count": 22073
+      },
+      {
+        "lower": 0.6,
+        "upper": 0.7,
+        "confidence": 0.6515449320376244,
+        "accuracy": 0.6614720012919375,
+        "count": 24769
+      },
+      {
+        "lower": 0.7,
+        "upper": 0.8,
+        "confidence": 0.7503857898736016,
+        "accuracy": 0.7440405989778779,
+        "count": 27981
+      },
+      {
+        "lower": 0.8,
+        "upper": 0.9,
+        "confidence": 0.8410732879594214,
+        "accuracy": 0.8306468605141172,
+        "count": 18984
+      },
+      {
+        "lower": 0.9,
+        "upper": 1,
+        "confidence": 0.9281138342824802,
+        "accuracy": 0.8011115522032553,
+        "count": 2519
+      }
+    ],
+    "shippedModelTemperature": 0.6661586815613669
+  },
+  "ablations": [
+    {
+      "name": "terrain",
+      "description": "The deployed contract: FEATURE_NAMES from @graze/features (9 values). LOAO mean macro-F1 shown; random split 0.486.",
+      "macroF1": 0.385491854052413,
+      "referenceMacroF1": 0.385491854052413
+    },
+    {
+      "name": "terrain-no-hillshade",
+      "description": "Contract features without the three hillshade columns. LOAO mean macro-F1 shown; random split 0.451.",
+      "macroF1": 0.3877113816992545,
+      "referenceMacroF1": 0.385491854052413
+    },
+    {
+      "name": "terrain-no-water",
+      "description": "Contract features without horizontal/vertical distance to water. LOAO mean macro-F1 shown; random split 0.434.",
+      "macroF1": 0.36226661653740544,
+      "referenceMacroF1": 0.385491854052413
+    },
+    {
+      "name": "all-original",
+      "description": "Contract features plus the excluded original columns: distance to roads and fire points, 4 wilderness-area and 40 soil-type indicators. Evaluation only; generated terrain has none of these. LOAO mean macro-F1 shown; random split 0.581.",
+      "macroF1": 0.34663637382817286,
+      "referenceMacroF1": 0.385491854052413
+    }
+  ],
+  "featureImportance": {
+    "method": "Permutation importance: mean drop in macro-F1 when one feature is shuffled (3 repeats, up to 20000 validation rows per fold); mean over the 4 LOAO folds",
+    "values": [
+      {
+        "feature": "elevation",
+        "importance": 0.14079105535642797
+      },
+      {
+        "feature": "slope",
+        "importance": 0.0037250651394500666
+      },
+      {
+        "feature": "aspectSin",
+        "importance": 0.0008121252103598469
+      },
+      {
+        "feature": "aspectCos",
+        "importance": 0.00459604575446199
+      },
+      {
+        "feature": "hillshade9am",
+        "importance": -0.004688305833621815
+      },
+      {
+        "feature": "hillshadeNoon",
+        "importance": -0.001892924017087785
+      },
+      {
+        "feature": "hillshade3pm",
+        "importance": 0.015146409199161387
+      },
+      {
+        "feature": "horizontalDistanceToWater",
+        "importance": 0.010423216735677426
+      },
+      {
+        "feature": "verticalDistanceToWater",
+        "importance": -0.00253486059158281
+      }
+    ]
+  },
+  "ood": {
+    "method": "standardized-distance",
+    "description": "Root-mean-square z-score of the 9 model features against the training mean/std. Threshold = 99th percentile of distances on in-distribution holdout rows, so about 1% of normal rows are flagged by design. It measures distance from the centre of the data, not unusual combinations of normal values.",
+    "threshold": 2.1026732433126947,
+    "flaggedRate": 0.009995155409367908,
+    "heldOutAreaFlaggedRate": {
+      "Rawah": 0.002828215711079024,
+      "Neota": 0.0010070117857675668,
+      "Comanche Peak": 0.017629315258279772,
+      "Cache la Poudre": 0.15161270911060296
+    },
+    "generatedTerrainFlaggedRate": 0.23704140370344684
+  },
+  "finalModelHoldout": {
+    "accuracy": 0.6830617812794819,
+    "macroF1": 0.488689933784557,
+    "logLoss": 0.7569257650744148,
+    "note": "Inner holdout of the dev set (also used for temperature and OOD threshold); not the locked test set."
+  },
+  "hillshade": {
+    "method": "@graze/features hillshade() with dataset-fitted sun positions",
+    "check": {
+      "rows": 47538,
+      "results": [
+        {
+          "column": "hillshade9am",
+          "ourSun": {
+            "azimuth": 100.4934827800006,
+            "altitude": 48.716227901461004
+          },
+          "ours": {
+            "mae": 22.81547393664016,
+            "meanDifference": -22.71277714670369
+          },
+          "bestFitSun": {
+            "azimuth": 114,
+            "altitude": 58.75,
+            "mae": 0.423114140266734
+          }
+        },
+        {
+          "column": "hillshadeNoon",
+          "ourSun": {
+            "azimuth": 180,
+            "altitude": 72.84
+          },
+          "ours": {
+            "mae": 11.047141234380916,
+            "meanDifference": 7.9235769279313395
+          },
+          "bestFitSun": {
+            "azimuth": 218,
+            "altitude": 68.75,
+            "mae": 0.4428036518153898
+          }
+        },
+        {
+          "column": "hillshade3pm",
+          "ourSun": {
+            "azimuth": 259.5065172199994,
+            "altitude": 48.716227901461004
+          },
+          "ours": {
+            "mae": 34.13235727207707,
+            "meanDifference": 34.12608860280197
+          },
+          "bestFitSun": {
+            "azimuth": 269,
+            "altitude": 37.75,
+            "mae": 0.7530186377214019
+          }
+        }
+      ]
+    }
+  },
+  "finalTest": null,
+  "limitations": [
+    "Predicts the mapped cover type of 30 m cells in four Colorado wilderness areas from terrain alone; it knows nothing about soil, climate, fire history or disturbance.",
+    "Soil type, wilderness area and distances to roads and fire points are excluded because generated terrain has none of them; the all-original-features ablation shows what that costs.",
+    "Spruce/Fir and Lodgepole Pine are most of the data; accuracy mostly reflects those two classes, so macro-F1 and per-class recall are reported.",
+    "Leave-one-area-out results vary a lot between areas; a held-out area can contain classes or elevations the training areas barely have.",
+    "Generated terrain is synthetic; hillshade and water distances are computed differently from the GIS layers behind the dataset.",
+    "The OOD flag is a distance from the training centre; it cannot catch inputs that look typical feature-by-feature but never occur together in real landscapes.",
+    "Educational simulation only, not a forest-management or ecological decision tool."
+  ],
+  "versions": {
+    "node": "v24.18.0",
+    "pipeline": "ml/src (no ML libraries)",
+    "modelJsonBytes": 2496
+  }
+}

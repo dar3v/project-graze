@@ -28,6 +28,34 @@ vector (aspect becomes sin and cos). Batch buffers are packed in this order,
 
 `elevation, slope, aspectDegrees, hillshade9am, hillshadeNoon, hillshade3pm, horizontalDistanceToWater, verticalDistanceToWater`
 
+## Feature formulas (Role 3, `@graze/features`)
+
+**Model vector** (`computeFeatures` / `sampleToVector`, in `FEATURE_NAMES` order):
+
+| Feature | Formula |
+| --- | --- |
+| `elevation` | raw elevation, m |
+| `slope` | raw slope, degrees |
+| `aspectSin`, `aspectCos` | `sin(aspect)`, `cos(aspect)` with aspect in radians. This removes the 0/360 wrap. |
+| `hillshade9am`, `hillshadeNoon`, `hillshade3pm` | raw value, 0–255 |
+| `horizontalDistanceToWater`, `verticalDistanceToWater` | raw value, m |
+
+No scaling happens here. Softmax and MLP models carry their own `scaler`
+in `model.json`. The forest uses raw values.
+
+**Heightmap → raw inputs** (`heightmapToSamples` in
+`packages/features/src/terrain.ts`):
+
+| Input | Formula |
+| --- | --- |
+| slope | `atan(hypot(dz/dx, dz/dy))` in degrees. Central differences use the 30 m cell size; edge cells use one-sided differences. |
+| aspect | compass bearing of the downhill direction, `atan2(-dz/dx, dz/dy)` mapped to [0, 360), where `+y` is south. A flat cell is 0. |
+| hillshade | `round(255 * clamp(cos(zen)cos(s) + sin(zen)sin(s)cos(az - aspect), 0, 1))`, with zen = 90° − sun altitude. Sun positions come from `SUN`, fitted so the formula reproduces Covertype's columns from Covertype's own slope and aspect (`ml/reports/exploration.json`, `hillshadeCheck`). Physically computed solstice positions are in `SUN_ASTRONOMICAL` but do not match the data. |
+| horizontal distance to water | exact Euclidean distance from the cell centre to the nearest water-cell centre (`distanceToWaterCells`) × 30 m. It is 0 on water. With no water on the map, it is the grid diagonal in meters. |
+| vertical distance to water | cell height − water level. It is 0 on water and negative never occurs on land. Covertype allows negative values; flat water cannot produce them. |
+
+Water: a cell is water when its height is strictly below the water level.
+
 ## Model output (per input)
 
 ```ts
@@ -89,6 +117,7 @@ missing ones and ignores malformed ones (with a visible warning):
   "model": { "type": "softmax", "weights": [[/* 7 x 9 */]], "bias": [7] }
   // or { "type": "mlp", "layers": [{ "weights": [[out][in]], "bias": [out], "activation": "relu" | "tanh" | "linear" }] }  (softmax applied to the last layer)
   // or { "type": "forest", "trees": [{ "feature": [], "threshold": [], "left": [], "right": [], "value": [[K]] }] }  (leaf: feature < 0; x[f] <= t goes left)
+  "temperature": { "value": 1.0, "applied": "folded-into-weights" | "not-applied" }  // informational; the runtime ignores it
 }
 ```
 
@@ -128,7 +157,9 @@ function, it replaces `createEngine().explainOne` in
 - **Animal positions (Role 2 → Role 1):** `getPositions(simState)` from
   `packages/sim/herd` returns `{ herbivores, predators }` as interleaved
   `Float32Array [x0, y0, x1, y1, ...]` in cell coordinates.
-- **Terrain → raw inputs:** the placeholder implementation is
+- **Terrain → raw inputs:** `heightmapToSamples` in `@graze/features` (Role 3)
+  is the reference implementation, and the ML pipeline uses it. Its output
+  is the 8 raw inputs per cell. The placeholder implementation is
   `apps/web/src/lib/sandbox/terrain.ts` (`computeCellInputs`). If Role 1
   ships one in `packages/sim/terrain/`, the app switches to it and the
   placeholder is deleted.

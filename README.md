@@ -116,16 +116,39 @@ This project uses the `cf` CLI, not wrangler (see `AGENTS.md`). Run `npx cf --he
 and `cf cli search` to find the authentication command before deploying. Check
 Cloudflare's current free-tier limits before launch.
 
-### Train the model *(scripts will be added as the pipeline lands)*
+### Train the model
 
 ```bash
-pnpm run ml:fetch      # download Covertype and verify the checksum
-pnpm run ml:prepare    # clean, encode, scale, split
-pnpm run ml:train      # train candidates, export model.json and model_card.json
-pnpm run ml:evaluate   # metrics, confusion matrix, ablations
+pnpm ml:train          # fetch + verify Covertype, explore, train every model, export (minutes)
+pnpm ml:fetch          # only download Covertype into ml/data/ and verify its SHA-256
+pnpm ml:explore        # only the data summary and baselines -> ml/reports/exploration.json
+pnpm ml:evaluate-final -- --confirm-frozen   # ONCE, after the model is frozen (D9)
 ```
 
-Seeds are fixed, dependencies are pinned, and versions are recorded in `model_card.json`, so rebuilding the model from scratch should reproduce the reported results.
+`pnpm ml:train` writes these files:
+
+- `apps/web/public/model/model.json` and `model_card.json`;
+- `ml/reports/train-report.json` (every fold, model and ablation);
+- `ml/test/fixtures/inference-fixtures.json`.
+
+Seeds are fixed, the pipeline uses no ML libraries, and the final test set is
+pinned by hash in `ml/splits.lock.json`. Rebuilding from scratch should
+reproduce the reported results. See `ml/README.md` for the pipeline.
+
+**Why train in TypeScript?** Training and the app call the same
+`@graze/features` function to turn terrain into model inputs. Preprocessing
+therefore cannot drift between what the model learned and what the sandbox
+feeds it, which is the most common way a deployed model silently breaks. The
+exported model is also checked against fixtures by running the app's own
+inference code in the tests. The pipeline is small:
+
+- three models written from scratch: softmax regression, an MLP and a
+  random forest;
+- about 2,600 lines of TypeScript, with plain loops and no framework magic.
+
+It would port to Python (NumPy or scikit-learn) in an afternoon if the course
+or a reviewer needed it. The JSON model format is documented in
+`docs/feature-contract.md`.
 
 ---
 
@@ -135,7 +158,7 @@ Seeds are fixed, dependencies are pinned, and versions are recorded in `model_ca
 apps/web/                 # Svelte + Vite app (see apps/web/README.md)
 packages/features/        # @graze/features — shared terrain-feature contract
 packages/sim/herd/        # herd simulation + ecology.json (rules are assumptions)
-ml/                       # Node/TypeScript training scripts (stub)
+ml/                       # Node/TypeScript data pipeline, training, evaluation, export
 docs/                     # feature contract, ecology rules, model/dataset cards
 src/index.ts              # Hono Worker entrypoint (Cloudflare template)
 cloudflare.config.ts      # Worker config / bindings

@@ -1,0 +1,298 @@
+{
+  "generatedBy": "ml/src/explore.ts",
+  "seed": 42,
+  "rows": 581012,
+  "devRows": 522911,
+  "testRowsLocked": 58101,
+  "classes": [
+    "Spruce/Fir",
+    "Lodgepole Pine",
+    "Ponderosa Pine",
+    "Cottonwood/Willow",
+    "Aspen",
+    "Douglas-fir",
+    "Krummholz"
+  ],
+  "classCounts": [
+    211840,
+    283301,
+    35754,
+    2747,
+    9493,
+    17367,
+    20510
+  ],
+  "classShare": [
+    0.36460520608868663,
+    0.48759922342395684,
+    0.06153745533655071,
+    0.004727957426008413,
+    0.016338733107061472,
+    0.02989094889606411,
+    0.03530047572167184
+  ],
+  "areas": [
+    "Rawah",
+    "Neota",
+    "Comanche Peak",
+    "Cache la Poudre"
+  ],
+  "devClassCountsByArea": [
+    [
+      95151,
+      131636,
+      0,
+      0,
+      3402,
+      0,
+      4588
+    ],
+    [
+      16685,
+      8040,
+      0,
+      0,
+      0,
+      0,
+      2087
+    ],
+    [
+      78820,
+      112590,
+      12875,
+      0,
+      5142,
+      6875,
+      11784
+    ],
+    [
+      0,
+      2705,
+      19304,
+      2472,
+      0,
+      8755,
+      0
+    ]
+  ],
+  "baselinesRandomSplit": {
+    "majority": {
+      "accuracy": 0.4875982482645197,
+      "macroF1": 0.09365014067538878
+    },
+    "elevationBand": {
+      "accuracy": 0.6750205580310187,
+      "macroF1": 0.3458691071398529
+    }
+  },
+  "devRanges": {
+    "elevation": {
+      "unit": "m",
+      "min": 1859,
+      "p01": 2123,
+      "median": 2996,
+      "p99": 3438,
+      "max": 3858,
+      "mean": 2959.3612373807396,
+      "std": 279.8757809316692,
+      "zeros": 0,
+      "negatives": 0
+    },
+    "slope": {
+      "unit": "deg",
+      "min": 0,
+      "p01": 2,
+      "median": 13,
+      "p99": 35,
+      "max": 66,
+      "mean": 14.10366964932847,
+      "std": 7.48943401336861,
+      "zeros": 582,
+      "negatives": 0
+    },
+    "aspectDegrees": {
+      "unit": "deg",
+      "min": 0,
+      "p01": 1,
+      "median": 127,
+      "p99": 356,
+      "max": 360,
+      "mean": 155.6122169929491,
+      "std": 111.90851219132138,
+      "zeros": 4402,
+      "negatives": 0
+    },
+    "hillshade9am": {
+      "unit": "0-255",
+      "min": 0,
+      "p01": 127,
+      "median": 218,
+      "p99": 252,
+      "max": 254,
+      "mean": 212.15560774204405,
+      "std": 26.76835357344766,
+      "zeros": 12,
+      "negatives": 0
+    },
+    "hillshadeNoon": {
+      "unit": "0-255",
+      "min": 0,
+      "p01": 162,
+      "median": 226,
+      "p99": 254,
+      "max": 254,
+      "mean": 223.31595242785102,
+      "std": 19.770327244346944,
+      "zeros": 4,
+      "negatives": 0
+    },
+    "hillshade3pm": {
+      "unit": "0-255",
+      "min": 0,
+      "p01": 41,
+      "median": 143,
+      "p99": 226,
+      "max": 254,
+      "mean": 142.51200491096955,
+      "std": 38.27558440784109,
+      "zeros": 1211,
+      "negatives": 0
+    },
+    "horizontalDistanceToWater": {
+      "unit": "m",
+      "min": 0,
+      "p01": 0,
+      "median": 218,
+      "p99": 937,
+      "max": 1397,
+      "mean": 269.5819613662746,
+      "std": 212.6491214023394,
+      "zeros": 22059,
+      "negatives": 0
+    },
+    "verticalDistanceToWater": {
+      "unit": "m",
+      "min": -173,
+      "p01": -42,
+      "median": 30,
+      "p99": 251,
+      "max": 601,
+      "mean": 46.43610480559789,
+      "std": 58.32771049986451,
+      "zeros": 34719,
+      "negatives": 49676
+    },
+    "horizontalDistanceToRoadways": {
+      "unit": "m",
+      "min": 0,
+      "p01": 150,
+      "median": 1998,
+      "p99": 6111,
+      "max": 7117,
+      "mean": 2350.774238828405,
+      "std": 1559.5800372314459,
+      "zeros": 113,
+      "negatives": 0
+    },
+    "horizontalDistanceToFirePoints": {
+      "unit": "m",
+      "min": 0,
+      "p01": 182,
+      "median": 1710,
+      "p99": 6263,
+      "max": 7173,
+      "mean": 1980.6931504596384,
+      "std": 1324.5560903310206,
+      "zeros": 47,
+      "negatives": 0
+    }
+  },
+  "devOddValues": {
+    "aspect360": 43,
+    "allHillshadeZero": 0,
+    "hillshade3pmZero": 1211,
+    "negativeVerticalDistance": 49676
+  },
+  "devDuplicates": {
+    "identicalFullRows": 0,
+    "identicalRawInputs": 227,
+    "identicalRawInputsWithDifferentLabel": 35
+  },
+  "hillshadeCheck": {
+    "rows": 47538,
+    "results": [
+      {
+        "column": "hillshade9am",
+        "astronomicalSun": {
+          "azimuth": 100.4934827800006,
+          "altitude": 48.716227901461004
+        },
+        "astronomical": {
+          "mae": 22.81547393664016,
+          "meanDifference": -22.71277714670369
+        },
+        "sharedSun": {
+          "azimuth": 114,
+          "altitude": 58.75
+        },
+        "shared": {
+          "mae": 0.423114140266734,
+          "meanDifference": -0.023602170894863057
+        },
+        "bestFitSun": {
+          "azimuth": 114,
+          "altitude": 58.75,
+          "mae": 0.423114140266734
+        }
+      },
+      {
+        "column": "hillshadeNoon",
+        "astronomicalSun": {
+          "azimuth": 180,
+          "altitude": 72.84
+        },
+        "astronomical": {
+          "mae": 11.047141234380916,
+          "meanDifference": 7.9235769279313395
+        },
+        "sharedSun": {
+          "azimuth": 218,
+          "altitude": 68.75
+        },
+        "shared": {
+          "mae": 0.4428036518153898,
+          "meanDifference": 0.060162396398670534
+        },
+        "bestFitSun": {
+          "azimuth": 218,
+          "altitude": 68.75,
+          "mae": 0.4428036518153898
+        }
+      },
+      {
+        "column": "hillshade3pm",
+        "astronomicalSun": {
+          "azimuth": 259.5065172199994,
+          "altitude": 48.716227901461004
+        },
+        "astronomical": {
+          "mae": 34.13235727207707,
+          "meanDifference": 34.12608860280197
+        },
+        "sharedSun": {
+          "azimuth": 269,
+          "altitude": 37.75
+        },
+        "shared": {
+          "mae": 0.7530186377214019,
+          "meanDifference": -0.2910303336278346
+        },
+        "bestFitSun": {
+          "azimuth": 269,
+          "altitude": 37.75,
+          "mae": 0.7530186377214019
+        }
+      }
+    ]
+  }
+}

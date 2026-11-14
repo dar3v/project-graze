@@ -1,0 +1,406 @@
+{
+  "generatedBy": "ml/src/train.ts",
+  "tolerance": 0.000001,
+  "cases": [
+    {
+      "source": "dev holdout row 51 (Spruce/Fir, Rawah)",
+      "sample": {
+        "elevation": 2739,
+        "slope": 25,
+        "aspectDegrees": 323,
+        "hillshade9am": 149,
+        "hillshadeNoon": 205,
+        "hillshade3pm": 192,
+        "horizontalDistanceToWater": 85,
+        "verticalDistanceToWater": 43
+      },
+      "probs": [
+        0.09496646374464035,
+        0.7366778254508972,
+        0.028155231848359108,
+        0.00016779181896708906,
+        0.01590169593691826,
+        0.12412545084953308,
+        0.000005559772034757771
+      ],
+      "classIndex": 1,
+      "oodScore": 1.2368619974864743,
+      "ood": false
+    },
+    {
+      "source": "dev holdout row 27 (Lodgepole Pine, Rawah)",
+      "sample": {
+        "elevation": 2962,
+        "slope": 16,
+        "aspectDegrees": 148,
+        "hillshade9am": 240,
+        "hillshadeNoon": 236,
+        "hillshade3pm": 120,
+        "horizontalDistanceToWater": 323,
+        "verticalDistanceToWater": 23
+      },
+      "probs": [
+        0.12423435598611832,
+        0.8296061754226685,
+        0.0030496185645461082,
+        0.00009688246791483834,
+        0.042067307978868484,
+        0.0004066027468070388,
+        0.0005390635342337191
+      ],
+      "classIndex": 1,
+      "oodScore": 0.7145197173548216,
+      "ood": false
+    },
+    {
+      "source": "dev holdout row 1824 (Ponderosa Pine, Cache la Poudre)",
+      "sample": {
+        "elevation": 2022,
+        "slope": 13,
+        "aspectDegrees": 24,
+        "hillshade9am": 212,
+        "hillshadeNoon": 212,
+        "hillshade3pm": 134,
+        "horizontalDistanceToWater": 391,
+        "verticalDistanceToWater": 42
+      },
+      "probs": [
+        1.3959938760521595e-9,
+        0.00008338527550222352,
+        0.669344425201416,
+        0.07576362043619156,
+        0.0001408090174663812,
+        0.254667729139328,
+        2.774589801605235e-18
+      ],
+      "classIndex": 2,
+      "oodScore": 1.2112656849834516,
+      "ood": false
+    },
+    {
+      "source": "dev holdout row 2026 (Cottonwood/Willow, Cache la Poudre)",
+      "sample": {
+        "elevation": 2006,
+        "slope": 11,
+        "aspectDegrees": 73,
+        "hillshade9am": 233,
+        "hillshadeNoon": 218,
+        "hillshade3pm": 115,
+        "horizontalDistanceToWater": 0,
+        "verticalDistanceToWater": 0
+      },
+      "probs": [
+        1.6545912417953446e-9,
+        0.00005203652472118847,
+        0.2914780378341675,
+        0.5518674850463867,
+        0.00028105772798880935,
+        0.15632134675979614,
+        4.780244499900057e-18
+      ],
+      "classIndex": 3,
+      "oodScore": 1.3553115460689364,
+      "ood": false
+    },
+    {
+      "source": "dev holdout row 4 (Aspen, Rawah)",
+      "sample": {
+        "elevation": 2595,
+        "slope": 2,
+        "aspectDegrees": 45,
+        "hillshade9am": 220,
+        "hillshadeNoon": 234,
+        "hillshade3pm": 150,
+        "horizontalDistanceToWater": 153,
+        "verticalDistanceToWater": -1
+      },
+      "probs": [
+        0.009304432198405266,
+        0.726070761680603,
+        0.05369318649172783,
+        0.016817137598991394,
+        0.043715089559555054,
+        0.15039926767349243,
+        9.198567596513385e-8
+      ],
+      "classIndex": 1,
+      "oodScore": 0.873840146231488,
+      "ood": false
+    },
+    {
+      "source": "dev holdout row 1901 (Douglas-fir, Comanche Peak)",
+      "sample": {
+        "elevation": 2551,
+        "slope": 27,
+        "aspectDegrees": 324,
+        "hillshade9am": 141,
+        "hillshadeNoon": 199,
+        "hillshade3pm": 192,
+        "horizontalDistanceToWater": 108,
+        "verticalDistanceToWater": 49
+      },
+      "probs": [
+        0.0030711244326084852,
+        0.1721271276473999,
+        0.23300082981586456,
+        0.0007665535667911172,
+        0.006771484389901161,
+        0.5842629075050354,
+        1.0591163501771916e-8
+      ],
+      "classIndex": 5,
+      "oodScore": 1.4175973178698427,
+      "ood": false
+    },
+    {
+      "source": "dev holdout row 1656 (Krummholz, Rawah)",
+      "sample": {
+        "elevation": 3256,
+        "slope": 7,
+        "aspectDegrees": 143,
+        "hillshade9am": 231,
+        "hillshadeNoon": 239,
+        "hillshade3pm": 140,
+        "horizontalDistanceToWater": 234,
+        "verticalDistanceToWater": 37
+      },
+      "probs": [
+        0.6875762343406677,
+        0.11746963113546371,
+        0.0000013497819963959046,
+        2.4442815771408277e-8,
+        0.0006629851995967329,
+        6.980642410781002e-7,
+        0.19428907334804535
+      ],
+      "classIndex": 0,
+      "oodScore": 0.7877185287325471,
+      "ood": false
+    },
+    {
+      "source": "generated terrain cell 0",
+      "sample": {
+        "elevation": 2877.497314453125,
+        "slope": 13.021961799111148,
+        "aspectDegrees": 28.27030522029594,
+        "hillshade9am": 215,
+        "hillshadeNoon": 211,
+        "hillshade3pm": 130,
+        "horizontalDistanceToWater": 750,
+        "verticalDistanceToWater": 159.84326171875
+      },
+      "probs": [
+        0.04912903532385826,
+        0.9118015766143799,
+        0.012786129489541054,
+        0.00006210160063346848,
+        0.021043259650468826,
+        0.005148421041667461,
+        0.000029493205147446133
+      ],
+      "classIndex": 1,
+      "oodScore": 1.0911200614751428,
+      "ood": false
+    },
+    {
+      "source": "generated terrain cell 36047",
+      "sample": {
+        "elevation": 2869.527099609375,
+        "slope": 23.200069786537956,
+        "aspectDegrees": 130.83888601574427,
+        "hillshade9am": 250,
+        "hillshadeNoon": 220,
+        "hillshade3pm": 84,
+        "horizontalDistanceToWater": 1033.1505214633537,
+        "verticalDistanceToWater": 174.748779296875
+      },
+      "probs": [
+        0.004377801902592182,
+        0.6747099757194519,
+        0.2630297839641571,
+        0.00025996906333602965,
+        0.056352537125349045,
+        0.0012653295416384935,
+        0.000004568329131870996
+      ],
+      "classIndex": 1,
+      "oodScore": 1.6939801217026331,
+      "ood": false
+    },
+    {
+      "source": "generated terrain cell 72095",
+      "sample": {
+        "elevation": 2985.476318359375,
+        "slope": 9.53451356290762,
+        "aspectDegrees": 203.11657438222633,
+        "hillshade9am": 215,
+        "hillshadeNoon": 249,
+        "hillshade3pm": 168,
+        "horizontalDistanceToWater": 1080,
+        "verticalDistanceToWater": 268.951904296875
+      },
+      "probs": [
+        0.01168457418680191,
+        0.8737788200378418,
+        0.0901089608669281,
+        0.00002680972647794988,
+        0.023733453825116158,
+        0.0006395764066837728,
+        0.000027822288757306524
+      ],
+      "classIndex": 1,
+      "oodScore": 1.9667778429787095,
+      "ood": false
+    },
+    {
+      "source": "generated terrain cell 108142",
+      "sample": {
+        "elevation": 2972.980224609375,
+        "slope": 21.48247739556214,
+        "aspectDegrees": 332.4356112119486,
+        "hillshade9am": 165,
+        "hillshadeNoon": 207,
+        "hillshade3pm": 178,
+        "horizontalDistanceToWater": 956.7131231461185,
+        "verticalDistanceToWater": 236.960205078125
+      },
+      "probs": [
+        0.07993502169847488,
+        0.8987045288085938,
+        0.014247353188693523,
+        0.0000012678447092184797,
+        0.004261287394911051,
+        0.0027483883313834667,
+        0.00010216834198217839
+      ],
+      "classIndex": 1,
+      "oodScore": 1.7852166509265763,
+      "ood": false
+    },
+    {
+      "source": "generated terrain cell 144190",
+      "sample": {
+        "elevation": 2901.5009765625,
+        "slope": 20.641893164647016,
+        "aspectDegrees": 26.13882117476055,
+        "hillshade9am": 206,
+        "hillshadeNoon": 191,
+        "hillshade3pm": 114,
+        "horizontalDistanceToWater": 1776.3445611704954,
+        "verticalDistanceToWater": 136.045654296875
+      },
+      "probs": [
+        0.004342733882367611,
+        0.8841838836669922,
+        0.11030785739421844,
+        5.204526587476721e-8,
+        0.0004923711530864239,
+        0.0006713047623634338,
+        0.0000018131712522517773
+      ],
+      "classIndex": 1,
+      "oodScore": 2.536395475410594,
+      "ood": true
+    },
+    {
+      "source": "generated terrain cell 180237",
+      "sample": {
+        "elevation": 2691.6845703125,
+        "slope": 24.873566980173276,
+        "aspectDegrees": 105.57557704637304,
+        "hillshade9am": 253,
+        "hillshadeNoon": 201,
+        "hillshade3pm": 60,
+        "horizontalDistanceToWater": 42.42640687119285,
+        "verticalDistanceToWater": 18.682373046875
+      },
+      "probs": [
+        0.012657641433179379,
+        0.3354727625846863,
+        0.06602940708398819,
+        0.05056207999587059,
+        0.5043052434921265,
+        0.03097049705684185,
+        0.0000023951579350978136
+      ],
+      "classIndex": 4,
+      "oodScore": 1.2621323300384306,
+      "ood": false
+    },
+    {
+      "source": "generated terrain cell 216285",
+      "sample": {
+        "elevation": 3000.4404296875,
+        "slope": 9.506494126202957,
+        "aspectDegrees": 198.63130217252595,
+        "hillshade9am": 217,
+        "hillshadeNoon": 249,
+        "hillshade3pm": 165,
+        "horizontalDistanceToWater": 1680,
+        "verticalDistanceToWater": 237.40869140625
+      },
+      "probs": [
+        0.002211755607277155,
+        0.8124521374702454,
+        0.18326514959335327,
+        4.388018624013057e-7,
+        0.001951637794263661,
+        0.00011498287494760007,
+        0.000003905146058968967
+      ],
+      "classIndex": 1,
+      "oodScore": 2.589822801758833,
+      "ood": true
+    },
+    {
+      "source": "generated terrain cell 252332",
+      "sample": {
+        "elevation": 2915.976806640625,
+        "slope": 28.42522766764028,
+        "aspectDegrees": 244.5044701298409,
+        "hillshade9am": 151,
+        "hillshadeNoon": 248,
+        "hillshade3pm": 225,
+        "horizontalDistanceToWater": 1484.92424049175,
+        "verticalDistanceToWater": 242.137939453125
+      },
+      "probs": [
+        0.0012214670423418283,
+        0.5436715483665466,
+        0.4541974663734436,
+        2.3919645286696323e-7,
+        0.00035824161022901535,
+        0.0005507137393578887,
+        3.015656204752304e-7
+      ],
+      "classIndex": 1,
+      "oodScore": 2.6322983132360016,
+      "ood": true
+    },
+    {
+      "source": "extreme input (outside training ranges)",
+      "sample": {
+        "elevation": 5000,
+        "slope": 80,
+        "aspectDegrees": 45,
+        "hillshade9am": 0,
+        "hillshadeNoon": 0,
+        "hillshade3pm": 0,
+        "horizontalDistanceToWater": 9000,
+        "verticalDistanceToWater": -900
+      },
+      "probs": [
+        2.212947158852785e-8,
+        3.377633506218558e-9,
+        3.16495539013484e-21,
+        0,
+        2.8218149411503213e-35,
+        1.3008851597439663e-34,
+        1
+      ],
+      "classIndex": 6,
+      "oodScore": 15.93255151194675,
+      "ood": true
+    }
+  ]
+}

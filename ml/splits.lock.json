@@ -1,0 +1,7 @@
+{
+  "seed": 42,
+  "testFraction": 0.1,
+  "testSize": 58101,
+  "testSha256": "ebb55c5d3455b9d911d1306a81681a60ecf9166af299cd9e0ce3116407b3a54f",
+  "devSize": 522911
+}
