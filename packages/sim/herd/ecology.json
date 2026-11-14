@@ -1,0 +1,45 @@
+{
+  "$comment": "Hand-written ecology ASSUMPTIONS for the herd simulation. Not model output, not fitted to data. Array entries are indexed by cover class in the order listed in model_card.json (classes[0] .. classes[6]). The comments in docs/ecology-rules.md explain each value. Edit freely; the app validates this file at load time.",
+  "version": 1,
+  "vegetation": {
+    "$classOrderAssumed": "Covertype class order: Spruce/Fir, Lodgepole Pine, Ponderosa Pine, Cottonwood/Willow, Aspen, Douglas-fir, Krummholz. If model_card.json lists classes in a different order, reorder these arrays.",
+    "foodByClass": [3, 2, 5, 9, 8, 4, 1],
+    "regrowthByClass": [0.006, 0.006, 0.01, 0.014, 0.014, 0.008, 0.003]
+  },
+  "herbivore": {
+    "initialCount": 60,
+    "startEnergy": 40,
+    "maxEnergy": 100,
+    "metabolismPerTick": 2,
+    "moveRadius": 2,
+    "wanderChance": 0.15,
+    "biteSize": 2,
+    "energyPerBiomass": 2,
+    "reproduceEnergyThreshold": 70,
+    "reproduceCost": 35,
+    "reproduceChance": 0.05,
+    "maxAge": 400,
+    "maxPopulation": 900
+  },
+  "predator": {
+    "enabled": true,
+    "initialCount": 8,
+    "startEnergy": 120,
+    "maxEnergy": 220,
+    "metabolismPerTick": 1.5,
+    "moveRadius": 2,
+    "wanderChance": 0.1,
+    "huntRadius": 3,
+    "killChance": 0.15,
+    "energyPerKill": 40,
+    "reproduceEnergyThreshold": 170,
+    "reproduceCost": 80,
+    "reproduceChance": 0.02,
+    "maxAge": 700,
+    "maxPopulation": 100
+  },
+  "log": {
+    "maxEvents": 200,
+    "maxHistory": 2000
+  }
+}

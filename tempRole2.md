@@ -1,0 +1,207 @@
+# Role 2: App and Sim
+
+**Owner:** [Name]
+**Mission:** Turn the model into a usable, honest product: the forms, validation, Model Report, Responsible Use page, and the herd simulation that makes the world feel like a game.
+
+---
+
+## Ownership
+
+| You own | You do not edit (ask the owner) |
+| --- | --- |
+| `apps/web/` except `src/lib/world/` | `apps/web/src/lib/world/` (Role 1) |
+| `packages/sim/herd/` (ecology rules, simulation) | `packages/features/` and `ml/` (Role 3) |
+| Inference Worker wiring | `model.json` contents (Role 3) |
+| Deploy config (Cloudflare Pages) | `packages/sim/terrain/` (Role 1) |
+| `docs/ecology-rules.md` | |
+
+---
+
+## Shared contract (agree on this in the first 30 minutes; source of truth is `docs/feature-contract.md`)
+
+- **Heightmap:** `Float32Array` of length 16384, row-major (`index = y * 128 + x`), values in meters, scaled into Covertype's elevation range.
+- **Cell size:** 30 m (verify against the dataset docs).
+- **Cover map:** `Uint8Array(16384)` of class indices 0-6, in the order listed in `model_card.json`.
+- **Model output per input:** `{ classIndex, probs: number[7], ood: boolean }`.
+- **Model files:** `apps/web/public/model/model.json` and `model_card.json`.
+- **Worker API:** agree on message names with Role 3 on Day 4 (suggested: `predictBatch`, `predictOne`, `explainOne`).
+
+You **consume** the model and the cover map. You **produce** the sim state (animal positions) that Role 1 renders.
+
+---
+
+## Design Style
+
+### LAYOUT
+- Single centered column on a full-viewport near-black background. Generous vertical whitespace, with content grouped in small clusters (eyebrow, title, tagline, selector, primary action, settings, footer).
+- Utility pinned top-right (small ghost button) and a credits/footer line pinned bottom-center.
+
+### COLOR
+- Background: #07090b to #0a0d10 (almost black, slightly cool).
+- Primary text: #d4d7dc. Secondary: #8a9098. Tertiary/captions: #5b6168.
+- Borders: 1px solid #2a2e33. Selected/hover fill: #1c1f23 with brighter text.
+- One restrained accent, a muted teal (#6fb8c4), used only for text links with a thin underline.
+- No saturated colors anywhere else.
+
+
+### TYPOGRAPHY
+- Monospace throughout (JetBrains Mono, IBM Plex Mono, or similar).
+- Title: ~44-52px, uppercase, very wide letter-spacing (0.3-0.4em), light weight.
+- Tagline: 14-15px, two short lines, wide-ish tracking, secondary color.
+- Eyebrow and section labels: 11-12px, uppercase, 0.15em tracking, tertiary color.
+- Buttons and tabs: 11-13px uppercase, 0.08em tracking. Small numeric prefix on tabs ("1 ", "2 ") in dimmer gray.
+
+### FEEL
+Hushed, cinematic, lo-fi, terminal-meets-game-launcher. Lots of negative space, low contrast hierarchy, everything small and deliberate. Accessibility: keep body text at least 4.5:1 contrast against the background.
+
+## Deliverables
+
+Each item is done only when every checkbox is ticked.
+
+### D1. App shell (Days 1-3)
+- [ ] Svelte routes: Sandbox, Model Report, About / Responsible Use
+- [ ] Consistent layout and navigation
+- [ ] Footer notice on every page: intended use, limitation, and dataset credit (Blackard, 1998; CC BY 4.0)
+
+### D2. Inference Worker integration (Days 6-7)
+- [ ] Web Worker loads `model.json` and `model_card.json`
+- [ ] No server round trip for predictions
+- [ ] Debounced batch prediction when the terrain changes
+- [ ] Graceful failure if the model files fail to load (visible error, no crash)
+- [ ] A stub that returns clearly labeled fake predictions is acceptable until Role 3 exports the real model, but it must be removed before Day 12
+
+### D3. Site Probe (Days 3-7)
+- [ ] Panel opens when a cell is clicked (Role 1 emits the selection)
+- [ ] Editable form with every model feature, prefilled from the cell
+- [ ] Validation for missing, non-numeric, and out-of-range values, using ranges from `model_card.json` (nothing hard-coded)
+- [ ] Output: predicted cover type, probability bars, one-sentence explanation
+- [ ] Sensitivity bars (how each input moves the probabilities), provided by Role 3's explain function
+- [ ] Out-of-range and OOD warnings shown in plain language
+- [ ] Validation unit tests
+
+### D4. Model Report page (Days 6-7)
+- [ ] Reads **only** from `model_card.json`; no numbers typed into the page
+- [ ] Shows: dataset summary, split strategy, baseline comparison table, confusion matrix, per-class precision/recall/F1, macro-F1, calibration, ablations, global feature importance, OOD detector summary
+- [ ] A "limitations and what these numbers do not mean" section (text written by humans, see Role 3)
+
+### D5. Herd simulation (Days 8-9)
+- [ ] Tick-based simulation on the cover map
+- [ ] Rules live in an editable `ecology.json` (food value per cover type, movement, reproduction, starvation)
+- [ ] Rules table shown in the UI and labeled **"assumptions, not model output"**
+- [ ] Population chart (canvas) and event log
+- [ ] Deterministic given a seed (unit test)
+
+### D6. Predator and score (Day 10)
+- [ ] Predator rules added to `ecology.json`
+- [ ] Rewilding score defined in `docs/ecology-rules.md`: rewards stable populations and habitat diversity
+- [ ] Score and event log visible in the UI
+
+### D7. Responsible Use page (Day 11)
+- [ ] Covers: privacy, bias, fairness, transparency, explainability, accountability, over-reliance
+- [ ] Each issue paired with a concrete safeguard in this app (OOD flag, limitations notice, report page, no personal data collected)
+- [ ] Draft by OpenCode is fine; the final wording is written and edited by humans
+
+### D8. Errors, tests, deploy (Days 11-12)
+- [ ] No unhandled errors on bad input, missing model, or empty terrain
+- [ ] Static deploy on Cloudflare Pages, linked in the README
+- [ ] Fallback: local run instructions plus the demo video
+
+### Optional (cut by default)
+Hono + D1 for saved or shared worlds. Only if everything above is frozen by Day 10.
+
+---
+
+## Tonight (definition of done)
+
+- [ ] Svelte shell with the three routes
+- [ ] Site Probe form with validation (hard-coded ranges are acceptable tonight)
+- [ ] Footer notice and dataset credit
+- [ ] A prediction stub, **clearly labeled as a stub**
+- [ ] Committed and pushed
+
+---
+
+## Timeline
+
+| Day | Target |
+| --- | --- |
+| 1 | Shell, routes, deploy hello-world |
+| 2-3 | D1 complete, Site Probe form started |
+| 4-5 | Agree Worker API with Role 3; Site Probe form and validation complete |
+| 6-7 | D2, D3, D4 complete (needs Role 3's `model.json`) |
+| 8-9 | D5 complete |
+| 10 | D6 complete |
+| 11 | D7 and D8 |
+| 12 | Final deploy, remove all stubs |
+| 13 | Record the demo video |
+| 14 | Buffer |
+
+---
+
+## Cut order (if behind)
+
+1. Predator
+2. Ecology editor (keep the rules read-only)
+3. Event log polish
+
+**Never cut:** input validation, the Model Report page, the limitations notice, the Responsible Use page.
+
+---
+
+## You must be able to explain in the defense
+
+- What happens between pressing submit and seeing a prediction (validation, features, Worker, model)
+- Why the herd simulation is **not** machine learning, and why that is labeled in the UI
+- How each Responsible ML issue maps to a safeguard in the app
+- Why the Model Report reads from `model_card.json` instead of hard-coded numbers
+
+---
+
+## Working rules
+
+- Never hard-code metrics, class names, or feature ranges. Read them from `model_card.json`.
+- Don't change the model API without telling Role 3 and updating `docs/feature-contract.md`.
+- "Done" means typecheck and tests pass.
+- Humans write the Responsible Use wording. OpenCode drafts.
+
+---
+## Current Progress
+nov 14
+
+I've built all eight Role 2 deliverables (D1–D8) that can be finished before Role 1 and Role 3 deliver. Typecheck passes, all 45 tests pass, and the build is clean. I also drove the built app in headless Firefox. The Sandbox page loaded the map, opened the Site Probe and ran the sim, with no app errors. The Model Report rendered every section from a throwaway fake card, which I deleted afterwards. Nothing is committed or pushed yet.
+
+What's in place:
+- D1 App shell: three pages (Sandbox, Model Report, Responsible Use) in your design style, with the notice and dataset credit (Blackard 1998, CC BY 4.0) in the footer of every page. A small button top-right shows the model status.
+- D2 Inference worker: predictions run in the browser, with no server round trip. The worker loads model_card.json and model.json and supports softmax, small neural net and random forest formats. It re-predicts the whole map 250 ms after the terrain stops changing. Missing or broken files show a visible error instead of crashing.
+- Stub: until Role 3 exports the model, a fake predictor runs. A banner says "STUB: fake predictions" and the classes are named "Stub class 1–7". To remove it on Day 12, set ALLOW_STUB_MODEL = false in apps/web/src/lib/model/config.ts and delete stub.ts.
+- D3 Site Probe: clicking a cell opens a form prefilled from that cell. Missing, non-numeric and physically impossible values are errors. Values outside the training range are allowed but get a plain-language warning. All ranges come from model_card.json. The output shows the predicted type, probability bars, a one-sentence explanation and sensitivity bars.
+- D4 Model Report: reads only model_card.json and never shows stub numbers. Any section missing from the card says "not in model_card.json yet".
+- D5/D6 Herd simulation: lives in packages/sim/herd, with herbivores, predators and the rules in ecology.json. The UI shows the rules table labeled "Assumptions, not model output", plus a population chart, event log and rewilding score. A unit test confirms the same seed gives the same run. I tuned the default rules so herds and predators cycle without either dying out in most seeds.
+- D7 Responsible Use: pairs each of the seven issues with a safeguard in the app. It's an agent-written draft, marked "Draft" on the page, for your team to rewrite.
+- D8: run commands, a local fallback and deploy steps are in the README.
+
+Decisions that need sign-off from Role 1 and Role 3:
+- Model file formats and worker messages: none of this existed yet, so I wrote it up in docs/feature-contract.md, marked "proposal". The app already follows it, so if Role 3 exports a different shape, either the files or the app has to change.
+- Sensitivity bars: I used a generic method (move each input ±10% and see how the probabilities shift). If Role 3 provides their own explain function, it replaces one function in engine.ts.
+- Placeholder map: the Sandbox uses a flat 2D map, and my own slope, aspect, hillshade and water-distance calculation, until Role 1's 3D world exists. I didn't touch src/lib/world/, packages/features/ or ml/. Role 1 plugs in by calling selectCell(...) when a cell is clicked, and gets animal positions from getPositions(simState). The hillshade sun angles are rough assumptions.
+
+Setup changes and limits:
+- The web app uses the root's packages, which keepspace" setup intact. I added
+  @sveltejs/vite-plugin-svelte and @types/node, plbuild and web:preview. typecheck and test now also
+  cover the web app and the sim.
+- I took apps/web/src out of the root tsconfig.jso, which is what the apps/web README said to do once
+  real code landed.
+- The .svelte component files themselves aren't tyompiles them.Deploy: I didn't deploy, because that needs yourouldn't confirm the exact cf command for a Pagesdeploy. The README has the steps and an empty sl
+
+changes
+
+How it behaves:
+- Before the world exists: the page stays black. That file doesn't exist yet, and the app builds and runs fine without it.
+- If it fails to load: the page stays black, a warning goes to the console, and nothing else breaks.
+- Dimming: a black layer at 72% opacity sits over the 3D world. To change how dark it is, edit DIM in apps/web/src/lib/backdrop/WorldBackdrop.svelte.
+- Reduced motion: Role 1's scene is told when the user has asked for reduced motion, so it can keep the camera still.
+- Persistence: the background stays mounted across all three pages, so switching tabs doesn't reload the 3D scene.
+
+Decision for you: the background is display-only and doesn't respond to clicks, so the 2D placeholder map is still how you click cells on the Sandbox page. Do you want clicking to happen on the 3D background instead? If so, the Sandbox page would need to let clicks through to it, and the dimming would probably be lighter there. Otherwise the 2D map box gets replaced by a second, interactive view of the world.
+
+---

@@ -21,7 +21,6 @@
     "cloudflare.config.ts",
     ".cloudflare/types",
     "packages/features/src",
-    "apps/web/src",
     "ml/src"
   ]
 }

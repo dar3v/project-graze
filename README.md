@@ -16,9 +16,10 @@ Sculpt a procedurally generated valley, let a trained model predict what vegetat
 | Terrain sandbox (noise terrain, water, camera) | Planned |
 | Data pipeline (download, prepare, split) | Planned |
 | Model training and evaluation | Planned |
-| Site Probe form (input, validation, prediction) | Planned |
-| Model Report page | Planned |
-| Herd simulation | Planned |
+| Site Probe form (input, validation, prediction) | Built; runs on a labeled stub until the model ships |
+| Model Report page | Built; reads `model_card.json` only (empty until exported) |
+| Herd simulation | Built (herbivores, predators, rewilding score) |
+| App shell and Responsible Use page | Built (Responsible Use wording is a draft) |
 | Deployment | Planned |
 
 *Update this table as work lands. Metrics are added to the report section only after the model is frozen.*
@@ -79,16 +80,37 @@ The ecology rules are **assumptions we wrote**, not model output. Only the habit
 git clone <repo-url>
 cd <repo-folder>
 pnpm install
-pnpm run dev
+pnpm web:dev        # the Svelte app (sandbox, Site Probe, Model Report, sim)
+pnpm test           # unit tests
+pnpm typecheck
 ```
 
-The dev server prints a local URL. If your layout keeps the Worker and the web app in separate folders, run the commands from the matching folder.
+`pnpm web:dev` prints a local URL. `pnpm run dev` starts the Hono Worker
+(`cf dev`), which is separate from the web app.
+
+### Run locally without the internet (fallback)
+
+```bash
+pnpm install
+pnpm web:build
+pnpm web:preview    # serves apps/web/dist on a local URL
+```
+
+Everything, including predictions, runs in the browser. To use the trained
+model, put `model.json` and `model_card.json` in `apps/web/public/model/`
+before building. Until those exist, the app runs a clearly labeled stub.
 
 ### Deploy
 
+The web app is a static site (`apps/web/dist`) meant for Cloudflare Pages.
+**Live demo:** *link goes here after the first deploy.*
+
 ```bash
-pnpm run deploy
+pnpm web:build
+npx cf cli search "deploy static site to pages"   # find the current Pages/static deploy command
 ```
+
+`pnpm run deploy` deploys the Hono Worker, not the web app.
 
 This project uses the `cf` CLI, not wrangler (see `AGENTS.md`). Run `npx cf --help`
 and `cf cli search` to find the authentication command before deploying. Check
@@ -110,11 +132,11 @@ Seeds are fixed, dependencies are pinned, and versions are recorded in `model_ca
 ## Project structure
 
 ```
-apps/web/                 # Svelte + Vite + three.js frontend (stub)
+apps/web/                 # Svelte + Vite app (see apps/web/README.md)
 packages/features/        # @graze/features — shared terrain-feature contract
-packages/sim/             # herd simulation (stub)
+packages/sim/herd/        # herd simulation + ecology.json (rules are assumptions)
 ml/                       # Node/TypeScript training scripts (stub)
-docs/                     # model card, dataset card, limitations notice (stubs)
+docs/                     # feature contract, ecology rules, model/dataset cards
 src/index.ts              # Hono Worker entrypoint (Cloudflare template)
 cloudflare.config.ts      # Worker config / bindings
 vite.config.ts            # Vite + @cloudflare/vite-plugin
