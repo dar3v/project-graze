@@ -3,12 +3,13 @@
   import { modelStatus, predictBatch } from '../model/client.ts'
   import { heightmapToInputs, sampleAt } from '../deps/features.ts'
   import type { TerrainInputs } from '../deps/features.ts'
-  import { posesToPositions, type InterpolatedPoses } from '../deps/herd.ts'
+  import { POSE_STRIDE, type InterpolatedPoses } from '../deps/herd.ts'
   import { inputSpec } from '../model/modelCard.ts'
   import SiteProbe from '../probe/SiteProbe.svelte'
   import { classColor } from '../sandbox/palette.ts'
-  import { buildSavedWorld, fetchWorld, modelMismatchNotice, parseWorldHash, restoreWorld, saveWorld, worldShareHash } from '../sandbox/worldIo.ts'
+  import { fetchWorld, modelMismatchNotice, parseWorldHash, restoreWorld, saveWorld, worldShareHash, type RestoredWorld } from '../sandbox/worldIo.ts'
   import SettingsPanel from '../settings/SettingsPanel.svelte'
+  import { reducedMotion, settings } from '../state/settings.ts'
   import SimPanel from '../sim/SimPanel.svelte'
   import { helpOpen, isTypingTarget } from '../help/help.ts'
   import {
@@ -25,6 +26,7 @@
   } from '../state/appState.ts'
   import { PREDICTION_NOTICE, WORLD_FEATURES } from '../state/worldFeatures.ts'
   import { CELL_SIZE_M, COVERTYPE_ELEVATION, GRID, reliefBand, waterLevelForShare } from '../world/terrain.ts'
+  import { exportShareCode, exportWorld, importWorld, isShareCode } from '../world/share.ts'
   import WorldView from '../world/WorldView.svelte'
 
   const DEBOUNCE_MS = 250
@@ -65,8 +67,8 @@
   let coverWorldKey = $state('')
   let predicting = $state(false)
   let predictError: string | null = $state(null)
+  // Poses keep their heading ([x, y, heading, ...]), so the animals face the way they move.
   let poses: InterpolatedPoses | null = $state.raw(null)
-  const positions = $derived(poses ? { herbivores: posesToPositions(poses.herbivores), predators: posesToPositions(poses.predators) } : null)
 
   function onHeightmapChange(): void {
     // Water distance is global, so the whole grid is recomputed (~16k cells, ~4 ms).
@@ -118,8 +120,8 @@
   )
   const busy = $derived(predictionState === 'loading' ? 'Loading the model…' : predictionState === 'predicting' ? 'Predicting…' : null)
 
-  // The one selection event (D9): orbit clicks (WorldView onpick) and, once
-  // ROLE-1 D11 lands, "inspect cell underfoot" in walk mode both call this.
+  // The one selection event (D9): orbit clicks and "inspect cell underfoot"
+  // (E in walk mode, ROLE-1 D11) both reach this through WorldView's onpick.
   function pick(x: number, y: number): void {
     if (!cells) return
     const i = y * GRID + x
@@ -174,7 +176,7 @@
   async function save(): Promise<void> {
     if (!card) return
     shareState = { kind: 'busy', what: 'Saving…' }
-    const world = buildSavedWorld($worldConfig, card.model.version, elevation, entry.base, entry.heightmap)
+    const world = exportWorld({ config: $worldConfig, modelVersion: card.model.version, elevation, base: entry.base, heightmap: entry.heightmap })
     const r = await saveWorld(world)
     if (!r.ok) {
       shareState = { kind: 'error', message: r.message }
@@ -202,27 +204,63 @@
       shareState = { kind: 'error', message: r.message }
       return
     }
-    const restored = restoreWorld(r.value)
+    showRestored(restoreWorld(r.value), r.value.modelVersion)
+    loadedFrom = id
+  }
+
+  /** Show a restored world (from the API or from a pasted code). */
+  function showRestored(restored: RestoredWorld, savedModelVersion: string): void {
     // Install first, then point the store at it, so the Sandbox picks up the
     // loaded heightmap (with its edits) instead of regenerating. Predictions
     // are never stored: the batch effect re-predicts with the current model.
-    const version = $terrainVersion
-    installTerrain(restored.config, version, elevation, restored.base, restored.heightmap)
+    installTerrain(restored.config, $terrainVersion, elevation, restored.base, restored.heightmap)
     worldConfig.set(restored.config)
     probeOpen.set(false)
     shareState = { kind: 'idle' }
     const current = card?.model.version
-    worldNotice = current ? modelMismatchNotice(r.value.modelVersion, current) : null
-    loadedFrom = id
+    worldNotice = current ? modelMismatchNotice(savedModelVersion, current) : null
+  }
+
+  // Offline share code (ROLE-1 D13): the same saved world, compressed into
+  // text. It needs no server, so it works when the Worlds API is not deployed.
+  let codeCopied = $state(false)
+
+  async function copyCode(): Promise<void> {
+    if (!card) return
+    const world = exportWorld({ config: $worldConfig, modelVersion: card.model.version, elevation, base: entry.base, heightmap: entry.heightmap })
+    try {
+      await navigator.clipboard.writeText(await exportShareCode(world))
+      codeCopied = true
+      setTimeout(() => (codeCopied = false), 1500)
+    } catch {
+      shareState = { kind: 'error', message: 'The code could not be copied. The browser blocked the clipboard.' }
+    }
+  }
+
+  async function loadCode(text: string): Promise<void> {
+    shareState = { kind: 'busy', what: 'Opening the world…' }
+    worldNotice = null
+    const r = await importWorld(text)
+    if (!r.ok) {
+      shareState = { kind: 'error', message: r.message }
+      return
+    }
+    showRestored(r.restored, r.modelVersion)
+    loadedFrom = null
+    codeInput = ''
   }
 
   let loadedFrom: string | null = $state(null)
 
   function loadFromInput(): void {
     const text = codeInput.trim()
+    if (isShareCode(text) || text.startsWith('{')) {
+      void loadCode(text)
+      return
+    }
     const id = parseWorldHash(text.includes('#') ? text.slice(text.indexOf('#')) : `#/world/${text.toLowerCase()}`)
     if (!id) {
-      shareState = { kind: 'error', message: 'That is not a world code. A code is 10 letters and digits, or paste the whole share link.' }
+      shareState = { kind: 'error', message: 'That is not a world code. Paste a 10-character code, a whole share link, or an offline code (it starts with "graze1.").' }
       return
     }
     location.hash = worldShareHash(id)
@@ -293,7 +331,11 @@
   {/if}
 
   <p class="hint muted">
-    Select a cell to probe it. Raise, lower or flatten the ground and the cover map is predicted again in your browser. Right-drag to orbit, scroll to zoom.
+    {#if $viewMode === 'walk'}
+      Walk the valley you sculpted. The plants are the model's predicted cover type; sparse, grey plants mark low trust. Press E to probe the cell under you, Esc to go back.
+    {:else}
+      Select a cell to probe it. Raise, lower or flatten the ground and the cover map is predicted again in your browser. Right-drag to orbit, scroll to zoom.
+    {/if}
   </p>
 
   {#if worldNotice}
@@ -312,11 +354,27 @@
       {confidence}
       {ood}
       selected={$probeOpen ? $selectedCell : null}
-      herbivores={positions?.herbivores ?? null}
-      predators={positions?.predators ?? null}
+      herbivores={poses?.herbivores ?? null}
+      predators={poses?.predators ?? null}
+      poseStride={POSE_STRIDE}
       {busy}
       onpick={card ? pick : undefined}
       onheightmapchange={onHeightmapChange}
+      seed={$worldConfig.seed}
+      viewMode={$viewMode}
+      onviewmodechange={setMode}
+      quality={$settings.quality}
+      timeOfDay={$settings.timeOfDay}
+      autoCycle={$settings.autoCycle}
+      ontimeofdaychange={(h) => settings.update((v) => ({ ...v, timeOfDay: h }))}
+      onautocyclechange={(on) => settings.update((v) => ({ ...v, autoCycle: on }))}
+      overlay={$settings.overlay}
+      showOod={$settings.showOod}
+      onoverlaychange={(m) => settings.update((v) => ({ ...v, overlay: m }))}
+      onshowoodchange={(on) => settings.update((v) => ({ ...v, showOod: on }))}
+      reducedMotion={$reducedMotion}
+      notice={PREDICTION_NOTICE}
+      prediction={predictionState}
     />
   </div>
 
@@ -385,6 +443,9 @@
     <h3 id="share-title" class="label">Save and share</h3>
     <div class="share-row">
       <button type="button" onclick={save} disabled={!card || shareState.kind === 'busy'}>Save and get a link</button>
+      <button type="button" onclick={copyCode} disabled={!card || shareState.kind === 'busy'} title="A code that holds the whole world. It works without the saved-worlds service.">
+        {codeCopied ? 'Code copied' : 'Copy offline code'}
+      </button>
       <form
         class="load"
         onsubmit={(e) => {
@@ -392,7 +453,7 @@
           loadFromInput()
         }}
       >
-        <input type="text" bind:value={codeInput} placeholder="World code or link" aria-label="World code or share link" maxlength="300" spellcheck="false" autocomplete="off" />
+        <input type="text" bind:value={codeInput} placeholder="World code or link" aria-label="World code, share link or offline code" maxlength="300000" spellcheck="false" autocomplete="off" />
         <button type="submit" disabled={!codeInput.trim() || shareState.kind === 'busy'}>Open</button>
       </form>
     </div>
@@ -405,7 +466,7 @@
       {:else if shareState.kind === 'error'}
         <span class="err">{shareState.message}</span>
       {:else}
-        Saves the seed, the sliders and your brush edits, plus the model version. No predictions and no personal data.
+        Saves the seed, the sliders and your brush edits, plus the model version. No predictions and no personal data. The offline code holds the same world as text and needs no server.
       {/if}
     </p>
   </div>

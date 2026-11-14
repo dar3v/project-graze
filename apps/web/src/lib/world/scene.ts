@@ -1,31 +1,61 @@
 /**
- * The 3D world (Role 1): a low-poly terrain mesh with vertex colors, a water
- * plane, an orbit camera, a sculpting brush, cell picking, overlays, and
- * instanced animals. No sim or model logic lives here: the renderer draws the
- * heightmap, cover/confidence/OOD arrays and animal positions it is given.
+ * The 3D world (Role 1): a low-poly terrain mesh with vertex colors, water,
+ * sky, vegetation and instanced animals, seen from an orbit camera (sculpt,
+ * pick, overlays) or on foot in walk mode. No sim or model logic lives here:
+ * the renderer draws the heightmap, cover/confidence/OOD arrays and animal
+ * positions it is given. Both views read the SAME live arrays, so a brush
+ * edit made in orbit view is what you walk on, with no reload.
+ *
+ * The pieces live in their own files; this class wires them together:
+ *   palette.ts          every color
+ *   terrainMaterial.ts  slope rock/dirt and shoreline blending
+ *   water.ts, sky.ts    animated water, sky dome (sun, moon, stars, clouds)
+ *   daynight.ts         cosmetic time of day (NOT the model's hillshade)
+ *   vegetation.ts       seeded placement by cover class;  flora.ts  the meshes
+ *   fauna.ts            animal meshes
+ *   walk.ts             walk physics (getGroundHeight, speed, slope, water)
+ *   quality.ts          presets and the frame-rate guard
  *
  * Performance notes (target: 30+ fps on a weak laptop):
  * - one vertex per cell (128 x 128 = 16k vertices, 32k triangles);
- * - flat shading computes normals in the fragment shader, so sculpting never
- *   recomputes normals; only the touched rows of the position and color
- *   buffers are re-uploaded (BufferAttribute.addUpdateRange);
- * - frames are rendered on demand (after a change or while the camera moves),
- *   except in auto-rotate mode;
- * - device pixel ratio is capped.
+ * - flat shading computes normals in the fragment shader, so sculpting only
+ *   re-uploads the touched rows of the position, normal and color buffers;
+ * - orbit view renders on demand (after a change or while the camera moves);
+ *   walk mode and the day/night cycle render every frame;
+ * - the shadow map is redrawn only when the sun, the terrain, the vegetation
+ *   or the walker's neighbourhood changes, not every frame;
+ * - vegetation is chunked: far chunks are hidden, the rest are frustum-culled;
+ * - the device pixel ratio is capped by the quality preset.
  */
 
 import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
+import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js'
 
 import { DirtyRectBatcher } from './batcher.ts'
 import { hexToRgb01, writeColors } from './colors.ts'
 import type { OverlayMode, Rgb } from './colors.ts'
-import { cellToWorldX, cellToWorldZ, heightToWorldY, nearestCell, worldToCellF } from './coords.ts'
+import { cellToWorldX, cellToWorldZ, heightToWorldY, nearestCell, VERTICAL_EXAGGERATION, worldToCellF } from './coords.ts'
 import type { Frame } from './coords.ts'
+import { advanceHour, dayState, wrapHour } from './daynight.ts'
+import type { DayState } from './daynight.ts'
+import { Fauna, ORBIT_ANIMAL_SCALE, WALK_ANIMAL_SCALE } from './fauna.ts'
+import { Flora } from './flora.ts'
+import { PALETTE } from './palette.ts'
+import { DEFAULT_QUALITY, FpsGuard, QUALITY } from './quality.ts'
+import type { QualityPreset } from './quality.ts'
+import { SkyDome } from './sky.ts'
 import { applyBrush, padRect, sampleHeight } from './terrain.ts'
 import type { BrushMode, DirtyRect } from './terrain.ts'
+import { createTerrainMaterial } from './terrainMaterial.ts'
+import type { TerrainUniforms } from './terrainMaterial.ts'
+import { GRASS_RADIUS, placeGrass, placeVegetation } from './vegetation.ts'
+import { eyeY, findSpawn, stepWalk, WADE_DEPTH_M, waterDepth, yawToBearing } from './walk.ts'
+import type { Blocked, WalkTerrain } from './walk.ts'
+import { WaterSurface } from './water.ts'
 
 export type WorldTool = 'select' | BrushMode
+export type ViewMode = 'orbit' | 'walk'
 
 export interface TerrainData {
   /** Heights in meters, row-major. The brush edits THIS array in place. */
@@ -55,19 +85,76 @@ export interface BrushSettings {
   readonly strength: number
 }
 
+/** Mouse-look state in walk mode. */
+export type LookState =
+  /** Pointer lock is available but not active: show "click to look". */
+  | 'prompt'
+  | 'locked'
+  /** The browser refused the lock: arrow keys and dragging still look around. */
+  | 'failed'
+  /** No Pointer Lock API (for example a phone): touch drag and arrow keys. */
+  | 'unsupported'
+
+/** What the walk HUD needs. Emitted when it changes, at most about 10 times a second. */
+export interface WalkStatus {
+  /** True once the camera has arrived at eye level and input is live. */
+  readonly active: boolean
+  /** Cell under the walker (nearest cell center). */
+  readonly cellX: number
+  readonly cellY: number
+  /** Exact position in fractional cell coordinates (for the minimap). */
+  readonly x: number
+  readonly y: number
+  /** Compass bearing in degrees: 0 north, 90 east. */
+  readonly bearing: number
+  readonly wading: boolean
+  readonly blocked: Blocked
+  readonly look: LookState
+}
+
+export interface WorldStats {
+  readonly fps: number
+  readonly drawCalls: number
+  readonly triangles: number
+  readonly geometries: number
+  readonly textures: number
+  readonly programs: number
+  readonly plants: number
+  readonly visiblePlants: number
+  readonly plantBatches: number
+  readonly visiblePlantBatches: number
+  readonly grassTufts: number
+  readonly animals: number
+  readonly pixelRatio: number
+  readonly quality: QualityPreset
+  readonly mode: ViewMode
+}
+
 export interface WorldRendererOptions {
-  /** Pointer input (orbit, brush, picking). False for the decorative backdrop. */
+  /** Pointer input (orbit, brush, picking, walking). False for the decorative backdrop. */
   readonly interactive: boolean
   /** Slowly orbit the camera (backdrop). Ignored when `reducedMotion` is true. */
   readonly autoRotate?: boolean
   readonly reducedMotion?: boolean
   readonly maxPixelRatio?: number
-  /** Called with the clicked cell (select tool). */
+  /**
+   * Sky, day/night, shadows, vegetation and the natural water. Defaults to
+   * `interactive`. The backdrop turns it off and keeps the app's dark look.
+   */
+  readonly scenery?: boolean
+  /** Called with the clicked cell (select tool) or the cell underfoot (walk mode, E). */
   readonly onPick?: (x: number, y: number) => void
   /** Debounced: the union of cells whose raw inputs may have changed. */
   readonly onHeightmapChange?: (rect: DirtyRect) => void
   /** Debounce for onHeightmapChange, ms. Default 250 (same as the app's batch debounce). */
   readonly changeDebounceMs?: number
+  /** Walk mode wants to leave (Esc, or the pointer lock was released). */
+  readonly onViewModeRequest?: (mode: ViewMode) => void
+  readonly onWalkStatus?: (status: WalkStatus) => void
+  /** The frame rate stayed under TARGET_FPS for LOW_FPS_SECONDS while animating. */
+  readonly onLowFps?: (fps: number) => void
+  /** The auto-cycle moved the clock (reported every quarter hour of scene time). */
+  readonly onHourChange?: (hour: number) => void
 }
 
 /** Thrown when the browser cannot create a WebGL2 context. */
@@ -95,33 +182,108 @@ function createContext(): { canvas: HTMLCanvasElement; context: WebGL2RenderingC
   }
 }
 
-const HERBIVORE_HEX = '#e3e5e8'
-const PREDATOR_HEX = '#c4a27f'
+/**
+ * PointerLockControls (three r187: it extends `Controls`, the camera is
+ * `controls.object`), with one change: a refused lock is reported through
+ * `onLockError` instead of an unhandled promise rejection, so walk mode can
+ * fall back to the keyboard without a console error.
+ */
+class LookControls extends PointerLockControls {
+  onLockError: (() => void) | null = null
+
+  override lock(): void {
+    const el = this.domElement as HTMLElement | null
+    if (!el || typeof el.requestPointerLock !== 'function') {
+      this.onLockError?.()
+      return
+    }
+    try {
+      const result = el.requestPointerLock() as unknown
+      if (result instanceof Promise) result.catch(() => this.onLockError?.())
+    } catch {
+      this.onLockError?.()
+    }
+  }
+}
+
 const CLICK_SLOP_PX = 5
+const ORBIT_FOV = 45
+const WALK_FOV = 68
+const ORBIT_NEAR = 0.5
+const WALK_NEAR = 0.05
+/** Seconds for the camera to travel between the orbit view and eye level. */
+const TRANSITION_S = 1.1
+/** Arrow-key turn speed, radians per second. */
+const KEY_TURN_SPEED = 1.9
+/** Touch / unlocked-mouse look sensitivity, radians per pixel. */
+const DRAG_LOOK_SPEED = 0.005
+const MAX_PITCH = 1.45
+/** Distance of the directional light from what it lights (world units). */
+const LIGHT_DISTANCE = 260
+/** The walk-mode shadow box is re-centered after the walker moves this far. */
+const SHADOW_RECENTER = 6
+const WALK_SHADOW_RADIUS = 52
+/** Scene hours between shadow redraws while the day/night cycle runs. */
+const SHADOW_HOUR_STEP = 0.03
+/** Hours between `onHourChange` reports while the cycle runs. */
+const HOUR_REPORT_STEP = 0.25
+/** Ambient light floor while a data overlay is shown, so its colors stay readable at night. */
+const OVERLAY_AMBIENT_FLOOR = 1.05
+
+const MOVE_KEYS = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ShiftLeft', 'ShiftRight', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'])
+
+interface Pose {
+  readonly pos: THREE.Vector3
+  readonly quat: THREE.Quaternion
+  readonly fov: number
+}
+
+interface Transition {
+  t: number
+  readonly dur: number
+  readonly from: Pose
+  readonly to: Pose
+  /** Fog blend at the start and end: 0 = orbit distances, 1 = walk distances. */
+  readonly fogFrom: number
+  readonly fogTo: number
+  readonly then: () => void
+}
+
+function isTypingTarget(t: EventTarget | null): boolean {
+  if (!(t instanceof HTMLElement)) return false
+  return t.isContentEditable || t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement || t instanceof HTMLSelectElement
+}
 
 export class WorldRenderer {
   readonly #host: HTMLElement
   readonly #opts: WorldRendererOptions
+  readonly #scenery: boolean
   readonly #renderer: THREE.WebGLRenderer
   readonly #scene = new THREE.Scene()
-  readonly #camera = new THREE.PerspectiveCamera(45, 1, 0.5, 2000)
+  readonly #camera = new THREE.PerspectiveCamera(ORBIT_FOV, 1, ORBIT_NEAR, 2000)
   readonly #controls: OrbitControls | null = null
   readonly #resize: ResizeObserver
   readonly #raycaster = new THREE.Raycaster()
   readonly #batcher: DirtyRectBatcher
-  readonly #disposables: { dispose(): void }[] = []
+  readonly #fog: THREE.Fog
+  readonly #hemi: THREE.HemisphereLight
+  readonly #sun: THREE.DirectionalLight
+  readonly #water: WaterSurface
+  readonly #sky: SkyDome | null = null
+  readonly #flora: Flora
+  readonly #fauna: Fauna
+  readonly #terrainMaterial: THREE.MeshLambertMaterial
+  readonly #terrainUniforms: TerrainUniforms
+  readonly #guard = new FpsGuard()
 
   #terrain: TerrainData | null = null
   #frame: Frame | null = null
   #mesh: THREE.Mesh<THREE.BufferGeometry, THREE.MeshLambertMaterial> | null = null
   #colors: Float32Array | null = null
-  #water: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshLambertMaterial>
   #cursor: THREE.LineLoop<THREE.BufferGeometry, THREE.LineBasicMaterial>
   #selection: THREE.LineLoop<THREE.BufferGeometry, THREE.LineBasicMaterial>
   #selected: { x: number; y: number } | null = null
-  #herbivores: THREE.InstancedMesh
-  #predators: THREE.InstancedMesh
-  #animalData: { herbivores: Float32Array | null; predators: Float32Array | null } = { herbivores: null, predators: null }
+  #animalData: { herbivores: Float32Array | null; predators: Float32Array | null; stride: number } = { herbivores: null, predators: null, stride: 2 }
   #overlay: OverlayData = { mode: 'terrain', cover: null, confidence: null, ood: null, showOod: false, classColors: [] }
   #classRgb: Rgb[] = []
   #classColorHex: string[] = []
@@ -129,13 +291,46 @@ export class WorldRenderer {
   #unbindPointer: (() => void) | null = null
   #brush: BrushSettings = { tool: 'select', radius: 6, strength: 40 }
 
+  // Environment
+  #quality: QualityPreset = DEFAULT_QUALITY
+  #hour = 10
+  #autoCycle = false
+  #day: DayState = dayState(10)
+  #lastShadowHour = 10
+  #lastReportedHour = 10
+  #reducedMotion: boolean
+  #seed = 0
+  #floraDirty = true
+  #shadowsDirty = true
+  #shadowCenter = new THREE.Vector3()
+  #time = 0
+
+  // View mode
+  #wantMode: ViewMode = 'orbit'
+  #mode: ViewMode = 'orbit'
+  #transition: Transition | null = null
+  #fogBlend = 0
+  #orbitPose: Pose | null = null
+  #player: { x: number; z: number } | null = null
+  #walkReady = false
+  #eyeY = 0
+  #keys = new Set<string>()
+  #joystick = { strafe: 0, forward: 0 }
+  #look: LookControls | null = null
+  #lookState: LookState = 'unsupported'
+  #unbindWalk: (() => void) | null = null
+  #lastStatus = ''
+  #statusAt = 0
+  #grassCenter: { x: number; y: number } | null = null
+  #cullCenter: { x: number; y: number } | null = null
+
   #raf = 0
   #needsRender = true
   #lastTime = 0
   #angle = Math.PI * 0.15
   #destroyed = false
 
-  // Pointer state
+  // Pointer state (orbit view)
   #pointer = new THREE.Vector2()
   #pointerInside = false
   #down: { x: number; y: number; brushing: boolean; flattenTarget: number } | null = null
@@ -143,6 +338,8 @@ export class WorldRenderer {
   constructor(host: HTMLElement, opts: WorldRendererOptions) {
     this.#host = host
     this.#opts = opts
+    this.#scenery = opts.scenery ?? opts.interactive
+    this.#reducedMotion = !!opts.reducedMotion
     const gl = createContext()
     if (!gl) throw new WorldUnavailableError()
     try {
@@ -150,36 +347,43 @@ export class WorldRenderer {
     } catch (err) {
       throw new WorldUnavailableError(err instanceof Error ? err.message : undefined)
     }
-    this.#renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, opts.maxPixelRatio ?? 1.5))
-    this.#renderer.setClearColor(0x0d1013)
+    this.#renderer.setClearColor(PALETTE.backdrop.clear)
+    // The shadow map is redrawn on request only (see #shadowsDirty).
+    this.#renderer.shadowMap.enabled = this.#scenery
+    this.#renderer.shadowMap.type = THREE.PCFShadowMap // soft (PCFSoftShadowMap was folded into it in r186)
+    this.#renderer.shadowMap.autoUpdate = false
     host.appendChild(this.#renderer.domElement)
 
-    this.#scene.fog = new THREE.Fog(0x0d1013, 180, 420)
-    this.#scene.add(new THREE.HemisphereLight(0xdfe8ef, 0x2a2f2a, 1.4))
-    const sun = new THREE.DirectionalLight(0xfff2dd, 2.2)
-    sun.position.set(60, 120, 90) // from the south-east, high
-    this.#scene.add(sun)
+    this.#fog = new THREE.Fog(PALETTE.backdrop.fog, 180, 420)
+    this.#scene.fog = this.#fog
+    this.#hemi = new THREE.HemisphereLight(PALETTE.backdrop.ambientSky, PALETTE.backdrop.ambientGround, 1.4)
+    this.#sun = new THREE.DirectionalLight(PALETTE.backdrop.light, 2.2)
+    this.#sun.position.set(60, 120, 90) // from the south-east, high
+    this.#scene.add(this.#hemi, this.#sun, this.#sun.target)
 
-    // Water plane (sized/positioned in setTerrain).
-    this.#water = new THREE.Mesh(
-      new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2),
-      new THREE.MeshLambertMaterial({ color: 0x2d5f73, transparent: true, opacity: 0.72, depthWrite: false }),
-    )
-    this.#water.renderOrder = 1
-    this.#scene.add(this.#water)
+    const terrain = createTerrainMaterial()
+    this.#terrainMaterial = terrain.material
+    this.#terrainUniforms = terrain.uniforms
+
+    this.#water = new WaterSurface()
+    this.#water.applyFlat(PALETTE.backdrop.water)
+    this.#scene.add(this.#water.mesh)
+
+    if (this.#scenery) {
+      this.#sky = new SkyDome()
+      this.#scene.add(this.#sky.mesh)
+    }
+    this.#flora = new Flora(this.#scene)
+    this.#fauna = new Fauna(this.#scene)
 
     // Brush cursor and selection outline: draped line loops.
-    this.#cursor = new THREE.LineLoop(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0xf4f1e8, depthTest: false, transparent: true, opacity: 0.9 }))
+    this.#cursor = new THREE.LineLoop(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: PALETTE.ui.brushCursor, depthTest: false, transparent: true, opacity: 0.9, fog: false }))
     this.#cursor.renderOrder = 3
     this.#cursor.visible = false
-    this.#selection = new THREE.LineLoop(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0xffffff, depthTest: false }))
+    this.#selection = new THREE.LineLoop(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: PALETTE.ui.selection, depthTest: false, fog: false }))
     this.#selection.renderOrder = 3
     this.#selection.visible = false
     this.#scene.add(this.#cursor, this.#selection)
-
-    // Animals: instanced, capacity grows on demand.
-    this.#herbivores = this.#makeAnimals(new THREE.BoxGeometry(0.7, 0.7, 0.7).translate(0, 0.35, 0), HERBIVORE_HEX, 64)
-    this.#predators = this.#makeAnimals(new THREE.ConeGeometry(0.5, 1.4, 6).translate(0, 0.7, 0), PREDATOR_HEX, 16)
 
     this.#camera.position.set(0, 95, 125)
     if (opts.interactive) {
@@ -194,8 +398,15 @@ export class WorldRenderer {
       this.#bindPointer()
     }
 
-    this.#batcher = new DirtyRectBatcher(opts.changeDebounceMs ?? 250, (r) => opts.onHeightmapChange?.(r))
+    this.#batcher = new DirtyRectBatcher(opts.changeDebounceMs ?? 250, (r) => {
+      // The ground moved: plants and shadows follow once the stroke pauses.
+      this.#floraDirty = true
+      this.#syncFlora()
+      opts.onHeightmapChange?.(r)
+    })
 
+    this.#applyQuality()
+    this.#applyDay()
     this.#resize = new ResizeObserver(() => this.#onResize())
     this.#resize.observe(host)
     this.#onResize()
@@ -204,11 +415,12 @@ export class WorldRenderer {
 
   // ---- Public API -----------------------------------------------------------
 
-  /** Replace the whole terrain (new seed, new size). Rebuilds the mesh. */
+  /** Replace the whole terrain (new seed, new size). Rebuilds the mesh if the size changed. */
   setTerrain(t: TerrainData): void {
     if (t.heightmap.length !== t.size * t.size) throw new Error(`Heightmap has ${t.heightmap.length} cells; expected ${t.size * t.size}.`)
     this.#batcher.cancel()
     const rebuild = !this.#terrain || this.#terrain.size !== t.size
+    const newGround = !this.#terrain || this.#terrain.heightmap !== t.heightmap
     this.#terrain = t
     let lo = Infinity
     let hi = -Infinity
@@ -221,7 +433,6 @@ export class WorldRenderer {
     this.#band = { min: lo, max: hi }
     if (rebuild) this.#buildMesh(t.size)
     this.#refresh({ x0: 0, y0: 0, x1: t.size - 1, y1: t.size - 1 })
-    this.#water.scale.set(t.size - 1, 1, t.size - 1) // exactly the mesh footprint
     this.setWaterLevel(t.waterLevelM)
     const d = t.size * 1.05
     if (rebuild) {
@@ -230,33 +441,59 @@ export class WorldRenderer {
       this.#controls?.target.set(0, 0, 0)
       this.#controls?.update()
     }
+    if (newGround) {
+      // A different world: the walker starts again from a dry spot.
+      this.#player = null
+      if (this.#mode === 'walk') this.#placeWalker(true)
+    }
+    this.#floraDirty = true
+    this.#syncFlora()
     this.#placeAnimals()
     this.#placeSelection()
+    this.#applyMode()
   }
 
   /** Call after the heightmap was changed outside the renderer. */
   refreshRegion(rect: DirtyRect): void {
-    if (this.#terrain) this.#refresh(rect)
+    if (!this.#terrain) return
+    this.#refresh(rect)
+    this.#floraDirty = true
+    this.#syncFlora()
   }
 
   setWaterLevel(m: number): void {
     if (!this.#terrain || !this.#frame) return
     const changed = m !== this.#terrain.waterLevelM
     this.#terrain = { ...this.#terrain, waterLevelM: m }
-    this.#water.position.y = heightToWorldY(m, this.#frame)
-    this.#water.visible = m > this.#band.min
-    // Underwater cells are tinted as riverbed: recolor everything.
-    if (changed) this.#recolor({ x0: 0, y0: 0, x1: this.#terrain.size - 1, y1: this.#terrain.size - 1 })
+    const y = heightToWorldY(m, this.#frame)
+    this.#water.mesh.position.y = y
+    this.#water.mesh.visible = m > this.#band.min
+    this.#water.setDepths(this.#terrain.heightmap, this.#terrain.size, m)
+    this.#terrainUniforms.uWaterY.value = this.#water.mesh.visible ? y : -1e6
+    if (changed) {
+      // Underwater cells are tinted as riverbed, and plants leave flooded cells.
+      this.#recolor({ x0: 0, y0: 0, x1: this.#terrain.size - 1, y1: this.#terrain.size - 1 })
+      this.#floraDirty = true
+      this.#syncFlora()
+      this.#placeAnimals()
+    }
     this.requestRender()
   }
 
   setOverlay(o: OverlayData): void {
+    const plantsChanged = o.cover !== this.#overlay.cover || o.ood !== this.#overlay.ood
     this.#overlay = o
     if (o.classColors.length !== this.#classRgb.length || o.classColors.some((c, i) => this.#classColorHex[i] !== c)) {
       this.#classColorHex = [...o.classColors]
       this.#classRgb = o.classColors.map(hexToRgb01)
     }
     if (this.#terrain) this.#recolor({ x0: 0, y0: 0, x1: this.#terrain.size - 1, y1: this.#terrain.size - 1 })
+    if (plantsChanged) {
+      this.#floraDirty = true
+      this.#grassCenter = null
+    }
+    this.#syncFlora()
+    this.#applyDay() // the ambient floor depends on the overlay
   }
 
   setSelection(cell: { x: number; y: number } | null): void {
@@ -264,16 +501,86 @@ export class WorldRenderer {
     this.#placeSelection()
   }
 
-  /** Interleaved [x0, y0, x1, y1, ...] in cell coordinates (getPositions). */
-  setAnimals(herbivores: Float32Array | null, predators: Float32Array | null): void {
-    this.#animalData = { herbivores, predators }
+  /**
+   * Animal positions from the sim, in cell coordinates. `stride` 2 is
+   * interleaved [x0, y0, x1, y1, ...]; 3 adds a heading per animal
+   * ([x, y, heading, ...], `POSE_STRIDE` in packages/sim/herd).
+   */
+  setAnimals(herbivores: Float32Array | null, predators: Float32Array | null, stride = 2): void {
+    this.#animalData = { herbivores, predators, stride: stride >= 3 ? 3 : 2 }
     this.#placeAnimals()
   }
 
   setBrush(b: BrushSettings): void {
     this.#brush = b
-    this.#renderer.domElement.style.cursor = b.tool === 'select' ? 'pointer' : 'crosshair'
+    if (this.#mode === 'orbit') this.#renderer.domElement.style.cursor = b.tool === 'select' ? 'pointer' : 'crosshair'
     this.#updateCursor()
+  }
+
+  /** Orbit view or first-person walk mode (D8). The camera glides between them. */
+  setMode(mode: ViewMode): void {
+    this.#wantMode = mode
+    this.#applyMode()
+  }
+
+  get mode(): ViewMode {
+    return this.#mode
+  }
+
+  /** Quality preset (D12): vegetation density, shadows, draw distance, pixel-ratio cap. */
+  setQuality(q: QualityPreset): void {
+    if (q === this.#quality) return
+    this.#quality = q
+    this.#applyQuality()
+  }
+
+  /** Hour of day, 0..24 (D10). Cosmetic: lighting and colors only, never a model input. */
+  setTimeOfDay(hour: number): void {
+    const h = wrapHour(Number.isFinite(hour) ? hour : 10)
+    // The cycle reports its own clock back; ignore the echo of that report.
+    if (Math.abs(h - this.#lastReportedHour) < 1e-6 && this.#autoCycle) return
+    this.#hour = h
+    this.#lastReportedHour = h
+    this.#applyDay()
+  }
+
+  /** Let the clock run by itself (one day per DAY_LENGTH_S). */
+  setAutoCycle(on: boolean): void {
+    if (on === this.#autoCycle) return
+    this.#autoCycle = on
+    this.#guard.reset()
+    if (!on) this.#reportHour(true)
+    this.requestRender()
+  }
+
+  get hour(): number {
+    return this.#hour
+  }
+
+  setReducedMotion(on: boolean): void {
+    this.#reducedMotion = on
+    this.requestRender()
+  }
+
+  /** World seed for vegetation placement: the same seed and cover map give the same forest. */
+  setSeed(seed: number): void {
+    const s = Number.isFinite(seed) ? Math.trunc(seed) | 0 : 0
+    if (s === this.#seed) return
+    this.#seed = s
+    this.#floraDirty = true
+    this.#grassCenter = null
+    this.#syncFlora()
+  }
+
+  /** On-screen joystick (touch): -1..1 each. Added to the WASD keys. */
+  setMoveInput(strafe: number, forward: number): void {
+    this.#joystick = { strafe: Number.isFinite(strafe) ? strafe : 0, forward: Number.isFinite(forward) ? forward : 0 }
+  }
+
+  /** Walk mode: open the Site Probe for the cell underfoot (same event as an orbit click). */
+  probeUnderfoot(): void {
+    const c = this.#walkerCell()
+    if (c) this.#opts.onPick?.(c.x, c.y)
   }
 
   requestRender(): void {
@@ -285,6 +592,35 @@ export class WorldRenderer {
     this.#batcher.flush()
   }
 
+  /** Counts for the performance readout (D12). Draw calls and triangles are for the last frame drawn. */
+  stats(): WorldStats {
+    const info = this.#renderer.info
+    const f = this.#flora.stats()
+    return {
+      fps: this.#guard.fps,
+      drawCalls: info.render.calls,
+      triangles: info.render.triangles,
+      geometries: info.memory.geometries,
+      textures: info.memory.textures,
+      programs: info.programs?.length ?? 0,
+      plants: f.plants,
+      visiblePlants: f.visiblePlants,
+      plantBatches: f.batches,
+      visiblePlantBatches: f.visibleBatches,
+      grassTufts: f.grassTufts,
+      animals: this.#fauna.count,
+      pixelRatio: this.#renderer.getPixelRatio(),
+      quality: this.#quality,
+      mode: this.#mode,
+    }
+  }
+
+  /** Draw a frame now and return it as a PNG data URL (photo mode, tests). */
+  capture(): string {
+    this.#render()
+    return this.#renderer.domElement.toDataURL('image/png')
+  }
+
   destroy(): void {
     if (this.#destroyed) return
     this.#destroyed = true
@@ -292,37 +628,578 @@ export class WorldRenderer {
     this.#batcher.cancel()
     this.#resize.disconnect()
     this.#unbindPointer?.()
+    this.#leaveWalkInput()
     this.#controls?.dispose()
-    this.#scene.traverse((o) => {
-      const m = o as Partial<THREE.Mesh>
-      m.geometry?.dispose()
-      const mat = m.material
-      if (Array.isArray(mat)) mat.forEach((x) => x.dispose())
-      else mat?.dispose()
-    })
-    for (const d of this.#disposables) d.dispose()
+    this.#flora.dispose()
+    this.#fauna.dispose()
+    this.#water.dispose()
+    this.#sky?.dispose()
+    this.#sun.shadow.map?.dispose()
+    this.#mesh?.geometry.dispose()
+    this.#terrainMaterial.dispose()
+    for (const line of [this.#cursor, this.#selection]) {
+      line.geometry.dispose()
+      line.material.dispose()
+    }
+    this.#scene.clear()
     this.#renderer.dispose()
     this.#renderer.domElement.remove()
   }
 
-  // ---- Internals --------------------------------------------------------------
+  // ---- Environment: quality, time of day, shadows --------------------------------
 
-  #makeAnimals(geo: THREE.BufferGeometry, hex: string, capacity: number): THREE.InstancedMesh {
-    const mesh = new THREE.InstancedMesh(geo, new THREE.MeshLambertMaterial({ color: hex, flatShading: true }), capacity)
-    mesh.count = 0
-    mesh.frustumCulled = false
-    this.#scene.add(mesh)
-    return mesh
+  #applyQuality(): void {
+    const q = QUALITY[this.#quality]
+    const ratio = Math.min(window.devicePixelRatio || 1, this.#opts.maxPixelRatio ?? Infinity, this.#scenery ? q.pixelRatioCap : 1.5)
+    if (ratio !== this.#renderer.getPixelRatio()) {
+      this.#renderer.setPixelRatio(ratio)
+      this.#onResize()
+    }
+    this.#sky?.setClouds(q.clouds)
+    const shadows = this.#scenery && q.shadowMapSize > 0
+    this.#sun.castShadow = shadows
+    if (shadows && this.#sun.shadow.mapSize.x !== q.shadowMapSize) {
+      this.#sun.shadow.mapSize.set(q.shadowMapSize, q.shadowMapSize)
+      this.#sun.shadow.map?.dispose()
+      this.#sun.shadow.map = null
+    }
+    if (this.#mesh) {
+      this.#mesh.castShadow = shadows
+      this.#mesh.receiveShadow = shadows
+    }
+    this.#flora.setCastShadow(shadows)
+    this.#applyFog()
+    this.#floraDirty = true
+    this.#grassCenter = null
+    this.#cullCenter = null
+    this.#syncFlora()
+    this.#shadowsDirty = true
+    this.#guard.reset()
+    this.requestRender()
   }
+
+  /** Light and color the scene for the current hour. */
+  #applyDay(): void {
+    if (!this.#scenery) return
+    const s = dayState(this.#hour)
+    this.#day = s
+    this.#hemi.color.setRGB(...s.ambientSky)
+    this.#hemi.groundColor.setRGB(...s.ambientGround)
+    // A data overlay must stay readable at night: its colors are the legend.
+    const dataOverlay = !this.#naturalView() && this.#overlay.mode !== 'terrain'
+    this.#hemi.intensity = dataOverlay ? Math.max(s.ambientIntensity, OVERLAY_AMBIENT_FLOOR) : s.ambientIntensity
+    this.#sun.color.setRGB(...s.lightColor)
+    this.#sun.intensity = s.lightIntensity
+    this.#fog.color.setRGB(...s.fog)
+    this.#renderer.setClearColor(this.#fog.color)
+    this.#sky?.apply(s)
+    this.#water.apply(s)
+    this.#shadowsDirty = true
+    this.#lastShadowHour = this.#hour
+    this.requestRender()
+  }
+
+  /** Fog distances: far and thin in orbit view, tied to the draw distance on foot. */
+  #applyFog(): void {
+    if (!this.#scenery) return
+    const size = this.#terrain?.size ?? 128
+    const draw = QUALITY[this.#quality].drawDistance
+    const k = this.#fogBlend
+    this.#fog.near = size * 2 * (1 - k) + draw * 0.45 * k
+    this.#fog.far = size * 7 * (1 - k) + draw * 1.05 * k
+  }
+
+  /** Fit the shadow box: the whole map in orbit view, the walker's surroundings on foot. */
+  #updateShadows(): void {
+    const sun = this.#sun
+    const size = this.#terrain?.size ?? 128
+    const walking = this.#mode === 'walk' && this.#player
+    const radius = walking ? Math.min(WALK_SHADOW_RADIUS, QUALITY[this.#quality].drawDistance) : size * 0.74
+    if (walking) this.#shadowCenter.set(Math.round(this.#player!.x / 2) * 2, 0, Math.round(this.#player!.z / 2) * 2)
+    else this.#shadowCenter.set(0, 0, 0)
+    const [dx, dy, dz] = this.#scenery ? this.#day.lightDir : [0.37, 0.74, 0.56]
+    sun.target.position.copy(this.#shadowCenter)
+    sun.position.set(this.#shadowCenter.x + dx * LIGHT_DISTANCE, dy * LIGHT_DISTANCE, this.#shadowCenter.z + dz * LIGHT_DISTANCE)
+    sun.target.updateMatrixWorld()
+    if (!sun.castShadow) return
+    const cam = sun.shadow.camera
+    cam.left = -radius
+    cam.right = radius
+    cam.top = radius
+    cam.bottom = -radius
+    // Depth range: everything within `radius` of the center plus the relief.
+    const reach = radius * 1.6 + 30
+    cam.near = Math.max(1, LIGHT_DISTANCE - reach)
+    cam.far = LIGHT_DISTANCE + reach
+    cam.updateProjectionMatrix()
+    const texel = (2 * radius) / sun.shadow.mapSize.x
+    sun.shadow.normalBias = texel * 2.2
+    sun.shadow.bias = -0.0004
+    this.#renderer.shadowMap.needsUpdate = true
+  }
+
+  #reportHour(force: boolean): void {
+    const moved = Math.abs(this.#hour - this.#lastReportedHour)
+    if (!force && Math.min(moved, 24 - moved) < HOUR_REPORT_STEP) return
+    this.#lastReportedHour = this.#hour
+    this.#opts.onHourChange?.(this.#hour)
+  }
+
+  #stepCycle(dt: number): void {
+    if (!this.#autoCycle || !this.#scenery || dt <= 0) return
+    this.#hour = advanceHour(this.#hour, dt)
+    // Colors follow every frame; the shadow map is redrawn in small steps.
+    const wasDirty = this.#shadowsDirty
+    const shadowHour = this.#lastShadowHour
+    const moved = Math.abs(this.#hour - shadowHour)
+    this.#applyDay()
+    if (Math.min(moved, 24 - moved) < SHADOW_HOUR_STEP) {
+      this.#shadowsDirty = wasDirty
+      this.#lastShadowHour = shadowHour
+    }
+    this.#reportHour(false)
+  }
+
+  // ---- Vegetation -------------------------------------------------------------
+
+  /** Walk mode (and the camera's trip to and from it) always shows the natural landscape. */
+  #naturalView(): boolean {
+    return this.#scenery && (this.#mode === 'walk' || this.#transition !== null)
+  }
+
+  #cover(): Uint8Array | null {
+    const t = this.#terrain
+    const c = this.#overlay.cover
+    return t && c && c.length === t.size * t.size ? c : null
+  }
+
+  /** Plants are drawn on foot, and in orbit view under the natural "Terrain" overlay. */
+  #floraWanted(): boolean {
+    return this.#scenery && !!this.#terrain && !!this.#cover() && (this.#naturalView() || this.#overlay.mode === 'terrain')
+  }
+
+  #syncFlora(): void {
+    const t = this.#terrain
+    const f = this.#frame
+    if (!t || !f) return
+    if (!this.#floraWanted()) {
+      // Not shown: free the meshes instead of keeping them hidden (D12).
+      if (this.#flora.hasPlants) {
+        this.#flora.dispose()
+        this.#shadowsDirty = true
+        this.requestRender()
+      }
+      this.#floraDirty = true
+      return
+    }
+    if (!this.#floraDirty && this.#flora.hasPlants) return
+    this.#floraDirty = false
+    const batches = placeVegetation({
+      size: t.size,
+      cellSizeM: t.cellSizeM,
+      heightmap: t.heightmap,
+      waterLevelM: t.waterLevelM,
+      cover: this.#cover()!,
+      ood: this.#overlay.ood,
+      seed: this.#seed,
+      density: QUALITY[this.#quality].vegetationDensity,
+    })
+    this.#flora.setPlants(batches, t.heightmap, f)
+    this.#flora.setCastShadow(this.#sun.castShadow)
+    this.#cullCenter = null
+    this.#cullFlora()
+    this.#shadowsDirty = true
+    this.requestRender()
+  }
+
+  /** Distance culling: on foot, chunks beyond the draw distance are dropped. */
+  #cullFlora(): void {
+    const f = this.#frame
+    if (!f) return
+    if (this.#mode !== 'walk' || !this.#player) {
+      this.#flora.cull(null, 0)
+      this.#cullCenter = null
+      return
+    }
+    const c = worldToCellF(this.#player.x, this.#player.z, f)
+    if (this.#cullCenter && Math.hypot(c.x - this.#cullCenter.x, c.y - this.#cullCenter.y) < 1) return
+    this.#cullCenter = c
+    this.#flora.cull(c, QUALITY[this.#quality].drawDistance)
+  }
+
+  /** Grass tufts around the walker, re-placed as they move. */
+  #syncGrass(force: boolean): void {
+    const t = this.#terrain
+    const f = this.#frame
+    const p = this.#player
+    if (!t || !f || !p || this.#mode !== 'walk') return
+    const c = worldToCellF(p.x, p.z, f)
+    if (!force && this.#grassCenter && Math.hypot(c.x - this.#grassCenter.x, c.y - this.#grassCenter.y) < GRASS_RADIUS * 0.2) return
+    this.#grassCenter = c
+    const tufts = placeGrass({
+      size: t.size,
+      cellSizeM: t.cellSizeM,
+      heightmap: t.heightmap,
+      waterLevelM: t.waterLevelM,
+      cover: this.#cover(),
+      ood: this.#overlay.ood,
+      seed: this.#seed,
+      perCell: QUALITY[this.#quality].grassPerCell,
+      centerX: c.x,
+      centerY: c.y,
+    })
+    this.#flora.setGrass(tufts, t.heightmap, f)
+  }
+
+  // ---- View modes (D8) -----------------------------------------------------------
+
+  #walkTerrain(): WalkTerrain {
+    const t = this.#terrain!
+    return { heightmap: t.heightmap, size: t.size, cellSizeM: t.cellSizeM, waterLevelM: t.waterLevelM }
+  }
+
+  #waterY(): number {
+    return this.#water.mesh.visible ? this.#water.mesh.position.y : -1e6
+  }
+
+  #walkerCell(): { x: number; y: number } | null {
+    if (!this.#player || !this.#frame) return null
+    const c = worldToCellF(this.#player.x, this.#player.z, this.#frame)
+    const size = this.#frame.size
+    return { x: Math.min(size - 1, Math.max(0, Math.round(c.x))), y: Math.min(size - 1, Math.max(0, Math.round(c.y))) }
+  }
+
+  /** Put the walker on valid ground. `snap` also moves the camera there at once. */
+  #placeWalker(snap: boolean): void {
+    const f = this.#frame
+    if (!f) return
+    const wt = this.#walkTerrain()
+    if (!this.#player) {
+      const want = this.#controls?.target ?? new THREE.Vector3()
+      this.#player = findSpawn(want.x, want.z, wt)
+    } else if (waterDepth(this.#player.x, this.#player.z, wt) > WADE_DEPTH_M) {
+      this.#player = findSpawn(this.#player.x, this.#player.z, wt)
+    }
+    const step = stepWalk(this.#player.x, this.#player.z, { forward: 0, strafe: 0, run: false, yaw: 0 }, 0, wt)
+    this.#player = { x: step.x, z: step.z }
+    this.#eyeY = eyeY(heightToWorldY(step.groundM, f), this.#waterY())
+    if (snap) this.#camera.position.set(step.x, this.#eyeY, step.z)
+    this.#grassCenter = null
+    this.#cullCenter = null
+    this.#shadowsDirty = true
+  }
+
+  #applyMode(): void {
+    if (!this.#opts.interactive || !this.#terrain || !this.#frame || this.#wantMode === this.#mode) return
+    if (this.#wantMode === 'walk') this.#enterWalk()
+    else this.#exitWalk()
+  }
+
+  #pose(): Pose {
+    return { pos: this.#camera.position.clone(), quat: this.#camera.quaternion.clone(), fov: this.#camera.fov }
+  }
+
+  #startTransition(to: Pose, fogTo: number, then: () => void): void {
+    const dur = this.#reducedMotion ? 0 : TRANSITION_S
+    this.#transition = { t: 0, dur, from: this.#pose(), to, fogFrom: this.#fogBlend, fogTo, then }
+    if (dur === 0) this.#stepTransition(0)
+    this.requestRender()
+  }
+
+  #stepTransition(dt: number): void {
+    const tr = this.#transition
+    if (!tr) return
+    tr.t = tr.dur > 0 ? Math.min(1, tr.t + dt / tr.dur) : 1
+    const k = tr.t * tr.t * (3 - 2 * tr.t)
+    this.#camera.position.lerpVectors(tr.from.pos, tr.to.pos, k)
+    this.#camera.quaternion.slerpQuaternions(tr.from.quat, tr.to.quat, k)
+    this.#camera.fov = tr.from.fov + (tr.to.fov - tr.from.fov) * k
+    this.#camera.updateProjectionMatrix()
+    this.#fogBlend = tr.fogFrom + (tr.fogTo - tr.fogFrom) * k
+    this.#applyFog()
+    this.#needsRender = true
+    if (tr.t >= 1) {
+      this.#transition = null
+      tr.then()
+    }
+  }
+
+  #enterWalk(): void {
+    // Remember where the orbit camera was (unless it is already on its way back there).
+    if (!this.#transition || !this.#orbitPose) this.#orbitPose = this.#pose()
+    this.#mode = 'walk'
+    this.#walkReady = false
+    this.#down = null
+    if (this.#controls) this.#controls.enabled = false
+    this.#cursor.visible = false
+    this.#renderer.domElement.style.cursor = 'default'
+
+    this.#placeWalker(false)
+    const p = this.#player!
+    // Face the way the orbit camera was looking.
+    const target = this.#controls?.target ?? new THREE.Vector3()
+    const dir = new THREE.Vector3().subVectors(target, this.#orbitPose.pos)
+    const yaw = Math.hypot(dir.x, dir.z) > 1e-3 ? Math.atan2(-dir.x, -dir.z) : 0
+    const to: Pose = {
+      pos: new THREE.Vector3(p.x, this.#eyeY, p.z),
+      quat: new THREE.Quaternion().setFromEuler(new THREE.Euler(-0.06, yaw, 0, 'YXZ')),
+      fov: WALK_FOV,
+    }
+    this.#camera.near = WALK_NEAR
+    this.#camera.updateProjectionMatrix()
+    this.#water.setDeepLine(true, WADE_DEPTH_M)
+    this.#startTransition(to, 1, () => {
+      this.#walkReady = true
+      this.#bindWalkInput()
+      this.#syncGrass(true)
+      this.#emitStatus(true)
+    })
+    // The natural landscape appears as the camera starts to descend.
+    this.#enterNaturalView()
+    this.#guard.reset()
+  }
+
+  #exitWalk(): void {
+    this.#mode = 'orbit'
+    this.#walkReady = false
+    this.#leaveWalkInput()
+    this.#water.setDeepLine(false, WADE_DEPTH_M)
+    this.#emitStatus(true)
+    const back = this.#orbitPose ?? this.#pose()
+    this.#flora.cull(null, 0)
+    this.#cullCenter = null
+    this.#shadowsDirty = true
+    this.#placeAnimals()
+    this.#startTransition({ pos: back.pos.clone(), quat: back.quat.clone(), fov: ORBIT_FOV }, 0, () => {
+      this.#camera.near = ORBIT_NEAR
+      this.#camera.fov = ORBIT_FOV
+      this.#camera.updateProjectionMatrix()
+      this.#orbitPose = null
+      if (this.#controls) {
+        this.#controls.enabled = true
+        this.#controls.update()
+      }
+      this.#renderer.domElement.style.cursor = this.#brush.tool === 'select' ? 'pointer' : 'crosshair'
+      // Walk-only resources go; the overlay the viewer had chosen comes back.
+      this.#flora.disposeGrass()
+      this.#grassCenter = null
+      this.#leaveNaturalView()
+    })
+  }
+
+  #enterNaturalView(): void {
+    const t = this.#terrain
+    if (t) this.#recolor({ x0: 0, y0: 0, x1: t.size - 1, y1: t.size - 1 })
+    this.#syncFlora()
+    this.#cullFlora()
+    this.#placeAnimals()
+    this.#applyDay()
+  }
+
+  #leaveNaturalView(): void {
+    const t = this.#terrain
+    if (t) this.#recolor({ x0: 0, y0: 0, x1: t.size - 1, y1: t.size - 1 })
+    this.#syncFlora()
+    this.#applyDay()
+  }
+
+  /** Turn the camera by a yaw / pitch change (radians), keeping it level. */
+  #lookBy(dyaw: number, dpitch: number): void {
+    const e = new THREE.Euler().setFromQuaternion(this.#camera.quaternion, 'YXZ')
+    e.y += dyaw
+    e.x = Math.min(MAX_PITCH, Math.max(-MAX_PITCH, e.x + dpitch))
+    e.z = 0
+    this.#camera.quaternion.setFromEuler(e)
+  }
+
+  #bindWalkInput(): void {
+    this.#leaveWalkInput()
+    const el = this.#renderer.domElement
+    const doc = el.ownerDocument
+    el.style.touchAction = 'none'
+
+    const requestOrbit = () => {
+      if (this.#opts.onViewModeRequest) this.#opts.onViewModeRequest('orbit')
+      else this.setMode('orbit')
+    }
+
+    // Mouse look: PointerLockControls. `lock()` needs a user gesture and can be
+    // refused, so the HUD shows "click to look" first and falls back to keys.
+    const look = new LookControls(this.#camera, el)
+    look.minPolarAngle = Math.PI / 2 - MAX_PITCH
+    look.maxPolarAngle = Math.PI / 2 + MAX_PITCH
+    this.#look = look
+    const supported = typeof el.requestPointerLock === 'function' && 'pointerLockElement' in doc
+    this.#lookState = supported ? 'prompt' : 'unsupported'
+    const onLockError = () => {
+      if (this.#look !== look) return
+      this.#lookState = 'failed'
+      this.#emitStatus(true)
+    }
+    look.onLockError = onLockError
+    // The addon logs console.error on `pointerlockerror`; handle it ourselves instead.
+    const internal = (look as unknown as { _onPointerlockError?: EventListener })._onPointerlockError
+    if (internal) doc.removeEventListener('pointerlockerror', internal)
+    doc.addEventListener('pointerlockerror', onLockError)
+    const onLock = () => {
+      this.#lookState = 'locked'
+      this.#emitStatus(true)
+    }
+    const onUnlock = () => {
+      if (this.#look !== look) return
+      // Esc (or anything else that releases the pointer) leaves walk mode.
+      this.#lookState = 'prompt'
+      requestOrbit()
+    }
+    look.addEventListener('lock', onLock)
+    look.addEventListener('unlock', onUnlock)
+
+    const keydown = (e: KeyboardEvent) => {
+      if (isTypingTarget(e.target) || e.ctrlKey || e.metaKey || e.altKey) return
+      if (MOVE_KEYS.has(e.code)) {
+        this.#keys.add(e.code)
+        if (e.code.startsWith('Arrow')) e.preventDefault() // look, do not scroll the page
+        return
+      }
+      if (e.code === 'KeyE' && !e.repeat) this.probeUnderfoot()
+      // While locked the browser handles Esc itself and fires `unlock`.
+      else if (e.code === 'Escape' && this.#lookState !== 'locked') requestOrbit()
+    }
+    const keyup = (e: KeyboardEvent) => this.#keys.delete(e.code)
+    const blur = () => this.#keys.clear()
+
+    // Click to lock (mouse). Without a lock, dragging looks around: this is
+    // also the touch look-drag.
+    let drag: { id: number; x: number; y: number } | null = null
+    const down = (e: PointerEvent) => {
+      if (e.pointerType === 'mouse' && e.button === 0 && this.#lookState === 'prompt') {
+        look.lock()
+        return
+      }
+      if (this.#lookState === 'locked') return
+      drag = { id: e.pointerId, x: e.clientX, y: e.clientY }
+      try {
+        el.setPointerCapture(e.pointerId)
+      } catch {
+        // Synthetic pointer: dragging still works inside the canvas.
+      }
+    }
+    const move = (e: PointerEvent) => {
+      if (!drag || drag.id !== e.pointerId) return
+      this.#lookBy(-(e.clientX - drag.x) * DRAG_LOOK_SPEED, -(e.clientY - drag.y) * DRAG_LOOK_SPEED)
+      drag = { id: e.pointerId, x: e.clientX, y: e.clientY }
+    }
+    const up = (e: PointerEvent) => {
+      if (!drag || drag.id !== e.pointerId) return
+      drag = null
+      if (el.hasPointerCapture(e.pointerId)) el.releasePointerCapture(e.pointerId)
+    }
+
+    window.addEventListener('keydown', keydown)
+    window.addEventListener('keyup', keyup)
+    window.addEventListener('blur', blur)
+    el.addEventListener('pointerdown', down)
+    el.addEventListener('pointermove', move)
+    el.addEventListener('pointerup', up)
+    el.addEventListener('pointercancel', up)
+
+    this.#unbindWalk = () => {
+      window.removeEventListener('keydown', keydown)
+      window.removeEventListener('keyup', keyup)
+      window.removeEventListener('blur', blur)
+      el.removeEventListener('pointerdown', down)
+      el.removeEventListener('pointermove', move)
+      el.removeEventListener('pointerup', up)
+      el.removeEventListener('pointercancel', up)
+      doc.removeEventListener('pointerlockerror', onLockError)
+      look.removeEventListener('lock', onLock)
+      look.removeEventListener('unlock', onUnlock)
+      look.onLockError = null
+      // Cleared first, so the `unlock` this causes is not read as "leave walk mode".
+      this.#look = null
+      if (look.isLocked) look.unlock()
+      look.dispose() // disconnect(): removes its mousemove / pointerlockchange listeners
+    }
+  }
+
+  /** Remove every walk-mode listener and release the pointer (D12 cleanup). */
+  #leaveWalkInput(): void {
+    this.#unbindWalk?.()
+    this.#unbindWalk = null
+    this.#keys.clear()
+    this.#joystick = { strafe: 0, forward: 0 }
+  }
+
+  #stepWalk(dt: number): void {
+    const f = this.#frame
+    const p = this.#player
+    if (!f || !p) return
+    const k = this.#keys
+    const turn = (k.has('ArrowLeft') ? 1 : 0) - (k.has('ArrowRight') ? 1 : 0)
+    const tilt = (k.has('ArrowUp') ? 1 : 0) - (k.has('ArrowDown') ? 1 : 0)
+    if (turn || tilt) this.#lookBy(turn * KEY_TURN_SPEED * dt, tilt * KEY_TURN_SPEED * 0.6 * dt)
+    const yaw = new THREE.Euler().setFromQuaternion(this.#camera.quaternion, 'YXZ').y
+    const step = stepWalk(
+      p.x,
+      p.z,
+      {
+        forward: (k.has('KeyW') ? 1 : 0) - (k.has('KeyS') ? 1 : 0) + this.#joystick.forward,
+        strafe: (k.has('KeyD') ? 1 : 0) - (k.has('KeyA') ? 1 : 0) + this.#joystick.strafe,
+        run: k.has('ShiftLeft') || k.has('ShiftRight'),
+        yaw,
+      },
+      dt,
+      this.#walkTerrain(),
+    )
+    this.#player = { x: step.x, z: step.z }
+    // Follow the ground smoothly: the eye eases to its height, so creases
+    // between cells do not jolt the view.
+    const target = eyeY(heightToWorldY(step.groundM, f), this.#waterY())
+    this.#eyeY += (target - this.#eyeY) * Math.min(1, dt * 14)
+    this.#camera.position.set(step.x, this.#eyeY, step.z)
+
+    this.#cullFlora()
+    this.#syncGrass(false)
+    if (Math.hypot(step.x - this.#shadowCenter.x, step.z - this.#shadowCenter.z) > SHADOW_RECENTER) this.#shadowsDirty = true
+    this.#emitStatus(false, yaw, step.wading, step.blocked)
+  }
+
+  #emitStatus(force: boolean, yaw?: number, wading = false, blocked: Blocked = 'none'): void {
+    const cb = this.#opts.onWalkStatus
+    const f = this.#frame
+    if (!cb || !f) return
+    const now = performance.now()
+    if (!force && now - this.#statusAt < 100) return
+    const p = this.#player ?? { x: 0, z: 0 }
+    const c = worldToCellF(p.x, p.z, f)
+    const cell = this.#walkerCell() ?? { x: 0, y: 0 }
+    const y = yaw ?? new THREE.Euler().setFromQuaternion(this.#camera.quaternion, 'YXZ').y
+    const status: WalkStatus = {
+      active: this.#mode === 'walk' && this.#walkReady,
+      cellX: cell.x,
+      cellY: cell.y,
+      x: Math.round(c.x * 10) / 10,
+      y: Math.round(c.y * 10) / 10,
+      bearing: Math.round(yawToBearing(y) / 2) * 2,
+      wading,
+      blocked,
+      look: this.#lookState,
+    }
+    const key = JSON.stringify(status)
+    if (key === this.#lastStatus) return
+    this.#lastStatus = key
+    this.#statusAt = now
+    cb(status)
+  }
+
+  // ---- Terrain mesh --------------------------------------------------------------
 
   #buildMesh(size: number): void {
     if (this.#mesh) {
       this.#scene.remove(this.#mesh)
       this.#mesh.geometry.dispose()
-      this.#mesh.material.dispose()
     }
     const geo = new THREE.BufferGeometry()
-    const pos = new Float32Array(size * size * 3)
     this.#colors = new Float32Array(size * size * 3)
     const index = new Uint32Array((size - 1) * (size - 1) * 6)
     let k = 0
@@ -340,17 +1217,25 @@ export class WorldRenderer {
         index[k++] = d
       }
     geo.setIndex(new THREE.BufferAttribute(index, 1))
-    const posAttr = new THREE.BufferAttribute(pos, 3)
-    posAttr.setUsage(THREE.DynamicDrawUsage)
-    const colAttr = new THREE.BufferAttribute(this.#colors, 3)
-    colAttr.setUsage(THREE.DynamicDrawUsage)
-    geo.setAttribute('position', posAttr)
-    geo.setAttribute('color', colAttr)
-    this.#mesh = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }))
+    const dynamic = (array: Float32Array, itemSize: number) => {
+      const attr = new THREE.BufferAttribute(array, itemSize)
+      attr.setUsage(THREE.DynamicDrawUsage)
+      return attr
+    }
+    geo.setAttribute('position', dynamic(new Float32Array(size * size * 3), 3))
+    // Lighting uses flat (per-face) normals from the shader. These per-vertex
+    // normals exist for the shadow map's normal bias only.
+    geo.setAttribute('normal', dynamic(new Float32Array(size * size * 3), 3))
+    geo.setAttribute('color', dynamic(this.#colors, 3))
+    // 1 = the natural slope/shore blend applies; 0 = keep the vertex color (low-trust marks).
+    geo.setAttribute('grazeBlend', dynamic(new Float32Array(size * size).fill(1), 1))
+    this.#mesh = new THREE.Mesh(geo, this.#terrainMaterial)
+    this.#mesh.castShadow = this.#sun.castShadow
+    this.#mesh.receiveShadow = this.#sun.castShadow
     this.#scene.add(this.#mesh)
   }
 
-  /** Update positions and colors in `rect` (plus a 1-cell border for colors). */
+  /** Update positions, normals and colors in `rect` (colors and normals one cell wider). */
   #refresh(rect: DirtyRect): void {
     const t = this.#terrain
     const f = this.#frame
@@ -370,8 +1255,31 @@ export class WorldRenderer {
     attr.needsUpdate = true
     mesh.geometry.computeBoundingSphere()
     mesh.geometry.computeBoundingBox()
-    // Terrain colors depend on the neighbour gradient: recolor one cell wider.
-    this.#recolor(padRect(rect, 1, t.size))
+
+    // Neighbours' gradients change too: normals and colors go one cell wider.
+    const wide = padRect(rect, 1, t.size)
+    const nAttr = mesh.geometry.getAttribute('normal') as THREE.BufferAttribute
+    const nrm = nAttr.array as Float32Array
+    const h = t.heightmap
+    const at = (x: number, y: number) => h[Math.min(t.size - 1, Math.max(0, y)) * t.size + Math.min(t.size - 1, Math.max(0, x))]
+    const k = VERTICAL_EXAGGERATION / (2 * t.cellSizeM)
+    for (let y = wide.y0; y <= wide.y1; y++) {
+      for (let x = wide.x0; x <= wide.x1; x++) {
+        const nx = -(at(x + 1, y) - at(x - 1, y)) * k
+        const nz = -(at(x, y + 1) - at(x, y - 1)) * k
+        const inv = 1 / Math.hypot(nx, 1, nz)
+        const i = (y * t.size + x) * 3
+        nrm[i] = nx * inv
+        nrm[i + 1] = inv
+        nrm[i + 2] = nz * inv
+      }
+      nAttr.addUpdateRange((y * t.size + wide.x0) * 3, (wide.x1 - wide.x0 + 1) * 3)
+    }
+    nAttr.needsUpdate = true
+
+    this.#water.setDepths(t.heightmap, t.size, t.waterLevelM)
+    this.#shadowsDirty = true
+    this.#recolor(wide)
   }
 
   #recolor(rect: DirtyRect): void {
@@ -379,6 +1287,11 @@ export class WorldRenderer {
     const mesh = this.#mesh
     if (!t || !mesh || !this.#colors) return
     const o = this.#overlay
+    const n = t.size * t.size
+    const natural = this.#naturalView()
+    const mode = natural ? 'terrain' : o.mode
+    const ood = o.ood && o.ood.length === n ? o.ood : null
+    const showOod = !natural && o.showOod
     writeColors(
       this.#colors,
       {
@@ -386,18 +1299,32 @@ export class WorldRenderer {
         heightmap: t.heightmap,
         waterLevelM: t.waterLevelM,
         band: this.#band,
-        mode: o.mode,
-        cover: o.cover && o.cover.length === t.size * t.size ? o.cover : null,
-        confidence: o.confidence && o.confidence.length === t.size * t.size ? o.confidence : null,
-        ood: o.ood && o.ood.length === t.size * t.size ? o.ood : null,
-        showOod: o.showOod,
+        mode,
+        cover: this.#cover(),
+        confidence: o.confidence && o.confidence.length === n ? o.confidence : null,
+        ood,
+        showOod,
         classRgb: this.#classRgb,
       },
       rect,
     )
+    // The natural blend is for the natural ground only. A data overlay keeps
+    // its exact colors, and so does a low-trust mark on natural ground.
+    const hasData = (mode === 'cover' && !!this.#cover()) || (mode === 'confidence' && !!o.confidence && o.confidence.length === n)
+    this.#terrainUniforms.uNatural.value = hasData ? 0 : 1
+    const blend = mesh.geometry.getAttribute('grazeBlend') as THREE.BufferAttribute
+    const mask = blend.array as Float32Array
     const attr = mesh.geometry.getAttribute('color') as THREE.BufferAttribute
-    for (let y = rect.y0; y <= rect.y1; y++) attr.addUpdateRange((y * t.size + rect.x0) * 3, (rect.x1 - rect.x0 + 1) * 3)
+    for (let y = rect.y0; y <= rect.y1; y++) {
+      for (let x = rect.x0; x <= rect.x1; x++) {
+        const i = y * t.size + x
+        mask[i] = showOod && ood && ood[i] && t.heightmap[i] >= t.waterLevelM ? 0 : 1
+      }
+      attr.addUpdateRange((y * t.size + rect.x0) * 3, (rect.x1 - rect.x0 + 1) * 3)
+      blend.addUpdateRange(y * t.size + rect.x0, rect.x1 - rect.x0 + 1)
+    }
     attr.needsUpdate = true
+    blend.needsUpdate = true
     this.requestRender()
   }
 
@@ -410,30 +1337,16 @@ export class WorldRenderer {
     const t = this.#terrain
     const f = this.#frame
     if (!t || !f) return
-    const m = new THREE.Matrix4()
-    const place = (mesh: THREE.InstancedMesh, pts: Float32Array | null): THREE.InstancedMesh => {
-      const n = pts ? pts.length >> 1 : 0
-      if (n > mesh.instanceMatrix.count) {
-        // Grow capacity (double) by replacing the mesh; geometry/material are reused.
-        const bigger = new THREE.InstancedMesh(mesh.geometry, mesh.material, Math.max(n, mesh.instanceMatrix.count * 2))
-        bigger.frustumCulled = false
-        this.#scene.remove(mesh)
-        mesh.dispose()
-        this.#scene.add(bigger)
-        mesh = bigger
-      }
-      for (let k = 0; k < n; k++) {
-        const cx = pts![k * 2]
-        const cy = pts![k * 2 + 1]
-        m.makeTranslation(cellToWorldX(cx, f), Math.max(this.#worldY(cx, cy), heightToWorldY(t.waterLevelM, f)), cellToWorldZ(cy, f))
-        mesh.setMatrixAt(k, m)
-      }
-      mesh.count = n
-      mesh.instanceMatrix.needsUpdate = true
-      return mesh
-    }
-    this.#herbivores = place(this.#herbivores, this.#animalData.herbivores)
-    this.#predators = place(this.#predators, this.#animalData.predators)
+    const waterY = heightToWorldY(t.waterLevelM, f)
+    this.#fauna.place(
+      this.#animalData.herbivores,
+      this.#animalData.predators,
+      this.#animalData.stride,
+      f,
+      (cx, cy) => Math.max(this.#worldY(cx, cy), waterY),
+      // Ground scale on foot; enlarged in orbit view so they read from far away.
+      this.#mode === 'walk' ? WALK_ANIMAL_SCALE : ORBIT_ANIMAL_SCALE,
+    )
     this.requestRender()
   }
 
@@ -469,8 +1382,14 @@ export class WorldRenderer {
     this.requestRender()
   }
 
+  // ---- Orbit view: brush and picking ----------------------------------------------
+
+  #orbitInput(): boolean {
+    return this.#mode === 'orbit' && this.#transition === null
+  }
+
   #updateCursor(): void {
-    const hit = this.#pointerInside && this.#brush.tool !== 'select' ? this.#hitCell() : null
+    const hit = this.#orbitInput() && this.#pointerInside && this.#brush.tool !== 'select' ? this.#hitCell() : null
     if (!hit) {
       if (this.#cursor.visible) {
         this.#cursor.visible = false
@@ -508,6 +1427,7 @@ export class WorldRenderer {
     // Capture phase: runs before OrbitControls' own listener, so a brush
     // stroke can disable orbiting for this drag (right/middle still orbit/pan).
     const down = (e: PointerEvent) => {
+      if (!this.#orbitInput()) return
       setPointer(e)
       const brushing = e.button === 0 && this.#brush.tool !== 'select'
       const hit = brushing ? this.#hitCell() : null
@@ -528,6 +1448,7 @@ export class WorldRenderer {
       }
     }
     const move = (e: PointerEvent) => {
+      if (!this.#orbitInput()) return
       setPointer(e)
       this.#pointerInside = true
       this.#updateCursor()
@@ -535,6 +1456,7 @@ export class WorldRenderer {
     const up = (e: PointerEvent) => {
       const d = this.#down
       this.#down = null
+      if (!this.#orbitInput()) return
       if (this.#controls) this.#controls.enabled = true
       if (!d) return
       if (d.brushing) {
@@ -595,6 +1517,8 @@ export class WorldRenderer {
     this.#placeSelection()
   }
 
+  // ---- Frame loop ------------------------------------------------------------------
+
   #onResize(): void {
     const w = this.#host.clientWidth || 1
     const h = this.#host.clientHeight || 1
@@ -604,22 +1528,46 @@ export class WorldRenderer {
     this.requestRender()
   }
 
+  #render(): void {
+    if (this.#sky) this.#sky.update(this.#camera, this.#time)
+    this.#water.setTime(this.#time)
+    if (this.#shadowsDirty) {
+      this.#shadowsDirty = false
+      this.#updateShadows()
+    }
+    this.#renderer.render(this.#scene, this.#camera)
+  }
+
   #tick = (now: number): void => {
     if (this.#destroyed) return
     this.#raf = requestAnimationFrame(this.#tick)
-    const dt = this.#lastTime ? Math.min(0.1, (now - this.#lastTime) / 1000) : 0
+    const raw = this.#lastTime ? (now - this.#lastTime) / 1000 : 0
+    const dt = Math.min(0.1, raw)
     this.#lastTime = now
-    this.#sculpt(dt)
-    if (this.#opts.autoRotate && !this.#opts.reducedMotion && this.#terrain) {
+
+    if (this.#orbitInput()) this.#sculpt(dt)
+    if (this.#opts.autoRotate && !this.#reducedMotion && this.#terrain) {
       this.#angle += dt * 0.03
       const d = this.#terrain.size * 0.85
       this.#camera.position.set(Math.sin(this.#angle) * d, d * 0.55, Math.cos(this.#angle) * d)
       this.#camera.lookAt(0, 0, 0)
       this.#needsRender = true
     }
-    if (this.#controls?.update()) this.#needsRender = true
+    this.#stepCycle(dt)
+    this.#stepTransition(dt)
+    if (this.#mode === 'walk' && this.#walkReady) this.#stepWalk(dt)
+    if (this.#orbitInput() && this.#controls?.update()) this.#needsRender = true
+
+    // Walk mode and the day/night cycle animate: every frame is drawn, and
+    // the frame rate is watched (D12). Orbit view draws on demand.
+    const animating = this.#scenery && (this.#mode === 'walk' || this.#transition !== null || this.#autoCycle)
+    if (animating) {
+      this.#needsRender = true
+      if (!this.#reducedMotion) this.#time += dt
+      if (this.#guard.frame(raw)) this.#opts.onLowFps?.(this.#guard.fps)
+    }
     if (!this.#needsRender) return
     this.#needsRender = false
-    this.#renderer.render(this.#scene, this.#camera)
+    this.#render()
   }
 }

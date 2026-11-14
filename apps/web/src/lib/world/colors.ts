@@ -4,17 +4,19 @@
  *
  * Overlays:
  * - terrain:    hypsometric tint (valley green -> rock -> snow), steep = rocky
- * - cover:      predicted class color (by class index, see ../sandbox/palette.ts)
+ * - cover:      predicted class color (by class index, see palette.ts `classOverlay`)
  * - confidence: pale (low) -> deep teal (high), max class probability
  * - OOD:        independent of the mode. Cells flagged as unlike the training
  *               data get an amber checkerboard ("low trust").
  */
 
+import { mix, PALETTE, toLinear } from './palette.ts'
+import type { Rgb } from './palette.ts'
 import type { DirtyRect } from './terrain.ts'
 
 export type OverlayMode = 'terrain' | 'cover' | 'confidence'
 
-export type Rgb = readonly [number, number, number]
+export type { Rgb } from './palette.ts'
 
 export interface ColorInputs {
   readonly size: number
@@ -33,38 +35,22 @@ export interface ColorInputs {
   readonly classRgb: readonly Rgb[]
 }
 
-const srgbToLinear = (c: number) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4)
-
 /**
  * '#rrggbb' (sRGB, as written in CSS) -> LINEAR 0..1 RGB, which is what
  * three.js expects in vertex colors. The renderer outputs sRGB, so the hex
- * values below display as written.
+ * values in the palette display as written.
  */
-export function hexToRgb01(hex: string): Rgb {
-  const n = parseInt(hex.replace('#', ''), 16)
-  return [srgbToLinear(((n >> 16) & 255) / 255), srgbToLinear(((n >> 8) & 255) / 255), srgbToLinear((n & 255) / 255)]
-}
+export const hexToRgb01 = toLinear
+export { mix }
 
-const lerp = (a: number, b: number, t: number) => a + (b - a) * t
-export function mix(a: Rgb, b: Rgb, t: number): Rgb {
-  const k = Math.min(1, Math.max(0, t))
-  return [lerp(a[0], b[0], k), lerp(a[1], b[1], k), lerp(a[2], b[2], k)]
-}
-
-/** Hypsometric stops, t = 0 (band min) .. 1 (band max). */
-const TERRAIN_STOPS: readonly (readonly [number, Rgb])[] = [
-  [0.0, hexToRgb01('#4f6b3a')],
-  [0.35, hexToRgb01('#6f8a4a')],
-  [0.6, hexToRgb01('#8a8256')],
-  [0.82, hexToRgb01('#8d8a84')],
-  [1.0, hexToRgb01('#e6e8ea')],
-]
-const ROCK = hexToRgb01('#7b746a')
-const RIVERBED = hexToRgb01('#4a5a52')
-export const CONFIDENCE_LOW = hexToRgb01('#e2dccb')
-export const CONFIDENCE_HIGH = hexToRgb01('#1f5a55')
-export const OOD_COLOR = hexToRgb01('#e0a040')
-const NO_DATA = hexToRgb01('#5a5f64')
+/** Hypsometric stops, t = 0 (band min) .. 1 (band max). Colors: palette.ts. */
+const TERRAIN_STOPS: readonly (readonly [number, Rgb])[] = PALETTE.terrain.stops.map(([t, hex]) => [t, toLinear(hex)] as const)
+const ROCK = toLinear(PALETTE.terrain.rock)
+const RIVERBED = toLinear(PALETTE.terrain.riverbed)
+export const CONFIDENCE_LOW = toLinear(PALETTE.overlay.confidenceLow)
+export const CONFIDENCE_HIGH = toLinear(PALETTE.overlay.confidenceHigh)
+export const OOD_COLOR = toLinear(PALETTE.overlay.ood)
+const NO_DATA = toLinear(PALETTE.overlay.noData)
 
 export function terrainColor(t: number, slope01: number): Rgb {
   const k = Math.min(1, Math.max(0, t))

@@ -1,6 +1,6 @@
 # App state, view modes and the sim view (Role 2: D9, D10, D11)
 
-*Agent draft, 2026-11-15. Role 1 needs to confirm the "WorldView props" section.*
+*Agent draft, 2026-11-15. The "WorldView props" section was confirmed and built on the Role 1 side the same day.*
 
 ## One shared state
 
@@ -34,8 +34,8 @@ Whatever the view, the cell selection goes through `pick(x, y)` in
 Site Probe panel and one form:
 
 - an orbit click calls it through `WorldView`'s `onpick`;
-- once ROLE-1 D11 lands, "inspect the cell underfoot" (E) in walk mode should
-  call the same `onpick`.
+- "inspect the cell underfoot" (E) in walk mode calls the same `onpick`
+  (ROLE-1 D11).
 
 ## Prediction state
 
@@ -51,16 +51,15 @@ The Sandbox derives one `predictionState` for every view:
 
 When the model files fail to load, the 3D world still renders and can be
 sculpted. It has no cover map, no Site Probe and no sim, and the page shows
-"Predictions unavailable". The walk HUD should show the same state; it is
-passed as `busy` today.
+"Predictions unavailable". The walk HUD shows the same state, from the
+`prediction` prop.
 
-## WorldView props the app will pass (needs Role 1)
+## WorldView props the app passes
 
-The flags in `apps/web/src/lib/state/worldFeatures.ts` say what `WorldView`
-supports today. The app shows a control as live only when its flag is true.
-Otherwise the control is disabled and labeled "Needs the 3D world update".
-When Role 1 adds a prop, the same change should flip its flag and pass the
-store value in `Sandbox.svelte`.
+Role 1 built every prop below on 2026-11-15, the flags in
+`apps/web/src/lib/state/worldFeatures.ts` are all true, and `Sandbox.svelte`
+passes the store values. The flags stay in the code as the switch for any
+later prop.
 
 | Prop | Type | From | Flag |
 | --- | --- | --- | --- |
@@ -69,9 +68,22 @@ store value in `Sandbox.svelte`.
 | `timeOfDay`, `autoCycle` | `number` (hours, 0–24), `boolean` | `$settings` | `timeOfDay` |
 | `overlay`, `showOod` | `'terrain' \| 'cover' \| 'confidence'`, `boolean` | `$settings` | `overlayProps` |
 | `reducedMotion` | `boolean` | `$reducedMotion` | `reducedMotion` |
-| `notice` | `string` | `PREDICTION_NOTICE` | (show in walk mode, ROLE-1 D11) |
+| `notice` | `string` | `PREDICTION_NOTICE` | (pinned in the walk HUD) |
 | `prediction` | `'loading' \| 'predicting' \| 'ready' \| 'unavailable' \| 'failed'` | `predictionState` | (walk HUD) |
-| `onviewmodechange` | `(m) => void` | sets `$viewMode` (e.g. Esc leaves walk mode) | `walkMode` |
+| `onviewmodechange` | `(m) => void` | sets `$viewMode` (Esc or a released pointer lock leaves walk mode) | `walkMode` |
+
+Added by Role 1 in the same change:
+
+| Prop | Type | Why |
+| --- | --- | --- |
+| `seed` | `number` (`$worldConfig.seed`) | the same seed and cover map give the same forest |
+| `poseStride` | `2 \| 3` | 3 passes `[x, y, heading]` poses straight through, so animals face the way they move |
+| `ontimeofdaychange` | `(hour) => void` | the cycle reports its clock every quarter hour, so the Settings slider follows it |
+| `onautocyclechange` | `(on) => void` | the frame-rate guard pauses the cycle (ROLE-1 D10 fallback); `T` in walk mode |
+| `onoverlaychange`, `onshowoodchange` | `(value) => void` | the controls under the world write the same settings as the Settings panel |
+
+Walk mode always shows the natural landscape. `overlay` and `showOod` apply in
+orbit view; on foot the prediction is in the plants, the HUD and the minimap.
 
 These props already work and need nothing more:
 
@@ -114,9 +126,9 @@ stands at `sampleHeight(heightmap, size, x, y)` from `packages/sim/terrain`:
   30 m contract.
 - Cell centers are exact, and points off the grid are clamped.
 
-This is the same function ROLE-1 D8's `getGroundHeight(x, z)` should use
+ROLE-1 D8's `getGroundHeight(x, z)` (`world/walk.ts`) is this function
 after converting world `(x, z)` to cells (`worldToCellF` in
-`world/coords.ts`). A unit test on a 3×3 heightmap is in
+`world/coords.ts`). Role 1 confirmed the convention on 2026-11-15. A unit test on a 3×3 heightmap is in
 `packages/sim/herd/test/view.test.ts`.
 
 **Water.** Animals stand only on land at every tick boundary (tested).

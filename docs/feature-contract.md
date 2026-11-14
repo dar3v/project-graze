@@ -157,8 +157,10 @@ function, it replaces `createEngine().explainOne` in
 - **Cell selection (Role 1 → Role 2):** call `selectCell({ x, y, sample, water })`
   from `apps/web/src/lib/sandbox/selection.ts`. The Site Probe opens prefilled.
 - **Animal positions (Role 2 → Role 1):** `WorldView` gets `herbivores` and
-  `predators` as interleaved `Float32Array [x0, y0, x1, y1, ...]` in cell
-  coordinates, interpolated between sim ticks every frame while the sim runs.
+  `predators` as a `Float32Array` in cell coordinates, interpolated between
+  sim ticks every frame while the sim runs. `poseStride` says how they are
+  packed: 2 is `[x0, y0, x1, y1, ...]`, 3 is `[x, y, heading, ...]`. The
+  Sandbox passes poses (3).
   Poses with heading (`[x, y, heading, ...]`, `POSE_STRIDE = 3`) come from
   `snapshotPoses` / `interpolateSnapshot` in `packages/sim/herd/src/view.ts`.
   Ground height: `sampleHeight(heightmap, size, x, y)` (bilinear). See

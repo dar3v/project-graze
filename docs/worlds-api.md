@@ -77,6 +77,15 @@ This matches the rule in `docs/model-card.md`, "Versioning and compatibility".
 - **Code:** the 10-character id. Paste it, or the whole link, into "World
   code or link" and press Open.
 
+- **Offline code (Role 1, D13):** "Copy offline code" puts the whole saved
+  world on the clipboard as text: `graze1.` followed by the same JSON,
+  deflate-compressed and base64url-encoded (`apps/web/src/lib/world/share.ts`).
+  Pasting it into "World code or link" opens the world with no request to the
+  API, so sharing works even where the Worker is not deployed. It is
+  validated with the same `validateWorld`, and a code that would inflate past
+  the 200 kB limit is refused. A world with no brush edits is about 150
+  characters; a heavily sculpted one can run to tens of thousands.
+
 Hosting check:
 
 - The part after `#` is never sent to the server; browsers keep the fragment
