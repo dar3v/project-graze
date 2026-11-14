@@ -7,26 +7,16 @@
   import { inputSpec } from '../model/modelCard.ts'
   import SiteProbe from '../probe/SiteProbe.svelte'
   import { classColor } from '../sandbox/palette.ts'
-  import { fetchWorld, modelMismatchNotice, parseWorldHash, restoreWorld, saveWorld, worldShareHash, type RestoredWorld } from '../sandbox/worldIo.ts'
+  import { fetchWorld, modelMismatchNotice, parseWorldHash, saveWorld, worldShareHash, type SavedWorld } from '../sandbox/worldIo.ts'
   import SettingsPanel from '../settings/SettingsPanel.svelte'
   import { reducedMotion, settings } from '../state/settings.ts'
   import SimPanel from '../sim/SimPanel.svelte'
   import { helpOpen, isTypingTarget } from '../help/help.ts'
-  import {
-    installTerrain,
-    probeOpen,
-    selectCell,
-    selectedCell,
-    terrainFor,
-    terrainVersion,
-    viewMode,
-    worldConfig,
-    worldKeyOf,
-    type ViewMode,
-  } from '../state/appState.ts'
+  import { probeOpen, selectCell, selectedCell, terrainVersion, viewMode, worldConfig, worldKeyOf, type ViewMode } from '../state/appState.ts'
+  import { openSavedWorld, terrainFor, toSavedWorld } from '../state/worldTerrain.ts'
   import { PREDICTION_NOTICE, WORLD_FEATURES } from '../state/worldFeatures.ts'
   import { CELL_SIZE_M, COVERTYPE_ELEVATION, GRID, reliefBand, waterLevelForShare } from '../world/terrain.ts'
-  import { exportShareCode, exportWorld, importWorld, isShareCode } from '../world/share.ts'
+  import { exportShareCode, importWorld, readWorldInput } from '../world/share.ts'
   import WorldView from '../world/WorldView.svelte'
 
   const DEBOUNCE_MS = 250
@@ -41,12 +31,14 @@
     return { min: e.min, max: e.max }
   })
 
-  // Terrain from the shared store. The entry is cached in appState, so
+  // Terrain from the shared store. It is cached in state/worldTerrain.ts, so
   // leaving this page and coming back keeps brush edits. WorldView's brush
   // edits `entry.heightmap` IN PLACE and then calls onheightmapchange.
+  // An opened world keeps the elevation range it was saved in, which can
+  // differ from `elevation` (the model loaded now): read `entry.elevation`.
   const entry = $derived(terrainFor($worldConfig, $terrainVersion, elevation))
   const heightM = $derived(entry.heightmap)
-  const band = $derived(reliefBand(elevation, $worldConfig.relief, $worldConfig.center))
+  const band = $derived(reliefBand(entry.elevation, $worldConfig.relief, $worldConfig.center))
 
   // Water level in meters for the chosen share of cells. Recomputed when the
   // slider or the terrain identity changes, not on every brush stroke, so
@@ -173,11 +165,15 @@
   let codeInput = $state('')
   let copied = $state(false)
 
+  /** The world being worked on, in saved-world form (recipe, edits, model version). */
+  function currentWorld(modelVersion: string): SavedWorld {
+    return toSavedWorld(entry, $worldConfig.waterShare, modelVersion)
+  }
+
   async function save(): Promise<void> {
     if (!card) return
     shareState = { kind: 'busy', what: 'Saving…' }
-    const world = exportWorld({ config: $worldConfig, modelVersion: card.model.version, elevation, base: entry.base, heightmap: entry.heightmap })
-    const r = await saveWorld(world)
+    const r = await saveWorld(currentWorld(card.model.version))
     if (!r.ok) {
       shareState = { kind: 'error', message: r.message }
       return
@@ -204,21 +200,18 @@
       shareState = { kind: 'error', message: r.message }
       return
     }
-    showRestored(restoreWorld(r.value), r.value.modelVersion)
+    openWorld(r.value)
     loadedFrom = id
   }
 
-  /** Show a restored world (from the API or from a pasted code). */
-  function showRestored(restored: RestoredWorld, savedModelVersion: string): void {
-    // Install first, then point the store at it, so the Sandbox picks up the
-    // loaded heightmap (with its edits) instead of regenerating. Predictions
-    // are never stored: the batch effect re-predicts with the current model.
-    installTerrain(restored.config, $terrainVersion, elevation, restored.base, restored.heightmap)
-    worldConfig.set(restored.config)
+  /** Make a saved world (from the API or from a pasted code) the world being worked on. */
+  function openWorld(world: SavedWorld): void {
+    // Predictions are never stored: the batch effect re-predicts with the current model.
+    openSavedWorld(world)
     probeOpen.set(false)
     shareState = { kind: 'idle' }
     const current = card?.model.version
-    worldNotice = current ? modelMismatchNotice(savedModelVersion, current) : null
+    worldNotice = current ? modelMismatchNotice(world.modelVersion, current) : null
   }
 
   // Offline share code (ROLE-1 D13): the same saved world, compressed into
@@ -227,9 +220,8 @@
 
   async function copyCode(): Promise<void> {
     if (!card) return
-    const world = exportWorld({ config: $worldConfig, modelVersion: card.model.version, elevation, base: entry.base, heightmap: entry.heightmap })
     try {
-      await navigator.clipboard.writeText(await exportShareCode(world))
+      await navigator.clipboard.writeText(await exportShareCode(currentWorld(card.model.version)))
       codeCopied = true
       setTimeout(() => (codeCopied = false), 1500)
     } catch {
@@ -245,7 +237,7 @@
       shareState = { kind: 'error', message: r.message }
       return
     }
-    showRestored(r.restored, r.modelVersion)
+    openWorld(r.world)
     loadedFrom = null
     codeInput = ''
   }
@@ -253,21 +245,14 @@
   let loadedFrom: string | null = $state(null)
 
   function loadFromInput(): void {
-    const text = codeInput.trim()
-    if (isShareCode(text) || text.startsWith('{')) {
-      void loadCode(text)
-      return
-    }
-    const id = parseWorldHash(text.includes('#') ? text.slice(text.indexOf('#')) : `#/world/${text.toLowerCase()}`)
-    if (!id) {
-      shareState = { kind: 'error', message: 'That is not a world code. Paste a 10-character code, a whole share link, or an offline code (it starts with "graze1.").' }
-      return
-    }
-    location.hash = worldShareHash(id)
+    const input = readWorldInput(codeInput)
+    if (input.kind === 'text') void loadCode(input.text)
+    else if (input.kind === 'id') location.hash = worldShareHash(input.id)
+    else shareState = { kind: 'error', message: input.message }
   }
 
   // A world link is loaded once the model has settled (ready or failed), so
-  // the terrain is built for the final elevation range and not regenerated.
+  // the notice can compare the saved model version with the loaded one.
   let pendingId: string | null = $state(null)
 
   function onHash(): void {

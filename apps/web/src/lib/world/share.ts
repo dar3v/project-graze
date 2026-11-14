@@ -1,28 +1,25 @@
 /**
- * Save, load and share a world on the client (D13, optional).
+ * The offline share code (D13, optional): a saved world as text.
  *
- * `exportWorld()` turns the world being worked on into the shared saved-world
- * format: the seed, the generation options, the model version, and the brush
- * edits as a compact delta from the generated terrain (never the full
- * heightmap). `importWorld()` reads one back and validates it.
+ * A code is the saved-world JSON, compressed and base64url-encoded, that a
+ * viewer copies and pastes. It needs no server, so sharing works on a static
+ * host even when the Worlds API is not deployed. (With the API, the short
+ * `#/world/<id>` link from `sandbox/worldIo.ts` does the same job.)
  *
  * The format, its limits and its validation belong to Role 2 and live in
  * `packages/worlds` (`docs/worlds-api.md`); the version is two fields there,
- * `schemaVersion` and `modelVersion`. This file only wraps
- * `buildSavedWorld()` / `restoreWorld()` and adds a share CODE: the same
- * JSON, compressed and base64url-encoded, that a viewer copies and pastes.
- * A code needs no server, so sharing works on a static host even when the
- * Worlds API is not deployed. (With the API, the short `#/world/<id>` link
- * from `sandbox/worldIo.ts` does the same job.)
+ * `schemaVersion` and `modelVersion`. Turning the terrain into a saved world
+ * and back (recipe plus a compact brush-edit delta, never the heightmap) is
+ * `../state/worldTerrain.ts` (`toSavedWorld`, `openSavedWorld`).
+ *
+ * `readWorldInput()` sorts what a viewer pasted into "World code or link":
+ * an offline code, saved-world JSON, a share link or a 10-character id.
  *
  * Nothing here throws on bad input: every failure is a message to show.
  */
 
-import { MAX_WORLD_BYTES, validateWorld } from '../../../../../packages/worlds/src/index.ts'
+import { MAX_WORLD_BYTES, parseWorldHash, validateWorld } from '../../../../../packages/worlds/src/index.ts'
 import type { SavedWorld } from '../../../../../packages/worlds/src/index.ts'
-import { buildSavedWorld, restoreWorld } from '../sandbox/worldIo.ts'
-import type { ElevationRange, RestoredWorld } from '../sandbox/worldIo.ts'
-import type { WorldConfig } from '../state/worldConfig.ts'
 
 /** Compressed code: `graze1.` + base64url(deflate-raw(JSON)). */
 export const SHARE_CODE_PREFIX = 'graze1.'
@@ -31,38 +28,10 @@ export const SHARE_CODE_PLAIN_PREFIX = 'graze0.'
 /** Longest text `importWorld` will look at. Base64 of the largest allowed world is about 267,000 characters. */
 export const MAX_IMPORT_CHARS = 300_000
 
-export interface ExportInput {
-  /** Seed, generation options and water share (the shared `worldConfig` store). */
-  readonly config: WorldConfig
-  /** `model_card.json` `model.version` right now. */
-  readonly modelVersion: string
-  /** Elevation range the terrain was generated into. */
-  readonly elevation: ElevationRange
-  /** The terrain as generated, before brush edits. */
-  readonly base: Float32Array
-  /** The live heightmap, with brush edits. */
-  readonly heightmap: Float32Array
-}
+/** A validated saved world (its `modelVersion` says which model it was saved with), or a message to show. */
+export type ImportResult = { readonly ok: true; readonly world: SavedWorld } | { readonly ok: false; readonly message: string }
 
-/** The world as a saved-world object: recipe plus the brush-edit delta. */
-export function exportWorld(input: ExportInput): SavedWorld {
-  return buildSavedWorld(input.config, input.modelVersion, input.elevation, input.base, input.heightmap)
-}
-
-export type ImportResult =
-  | {
-      readonly ok: true
-      readonly world: SavedWorld
-      /** Format version of the saved world. */
-      readonly schemaVersion: number
-      /** Model the world was saved with. The app predicts again with its current model and says so if they differ. */
-      readonly modelVersion: string
-      /** Config and heightmaps rebuilt from the recipe and the edits. */
-      readonly restored: RestoredWorld
-    }
-  | { readonly ok: false; readonly message: string }
-
-const NOT_A_WORLD = 'That is not a world code. Paste a whole code (it starts with "graze1."), a share link, or a 10-character world code.'
+export const NOT_A_WORLD = 'That is not a world code. Paste a 10-character code, a whole share link, or an offline code (it starts with "graze1.").'
 const DAMAGED = 'This world code is damaged or incomplete. Copy the whole code and try again.'
 const TOO_LARGE = `This world is too large to open (over ${MAX_WORLD_BYTES / 1000} kB).`
 
@@ -161,7 +130,7 @@ async function codeToJson(text: string): Promise<{ json: string } | { message: s
 /**
  * Read a world from untrusted text: a share code, or the saved-world JSON
  * itself. The world is validated with the same `validateWorld` the server
- * uses (types, ranges, unknown fields, size), and only then rebuilt. Bad,
+ * uses (types, ranges, unknown fields, size). Bad,
  * damaged or oversized input gives `{ ok: false, message }`; it never throws.
  */
 export async function importWorld(text: unknown): Promise<ImportResult> {
@@ -188,8 +157,24 @@ export async function importWorld(text: unknown): Promise<ImportResult> {
     }
     const check = validateWorld(parsed)
     if (!check.ok) return { ok: false, message: `This world cannot be opened: ${check.errors.slice(0, 3).join(' ')}` }
-    return { ok: true, world: check.world, schemaVersion: check.world.schemaVersion, modelVersion: check.world.modelVersion, restored: restoreWorld(check.world) }
+    return { ok: true, world: check.world }
   } catch {
     return { ok: false, message: DAMAGED }
   }
+}
+
+/** What a viewer pasted into "World code or link". */
+export type WorldInput =
+  /** An offline code or saved-world JSON: open it with `importWorld`. */
+  | { readonly kind: 'text'; readonly text: string }
+  /** A saved-world id (from a bare code or a whole share link): fetch it from the API. */
+  | { readonly kind: 'id'; readonly id: string }
+  | { readonly kind: 'invalid'; readonly message: string }
+
+/** Sort pasted text into an offline code / JSON, a saved-world id, or neither. */
+export function readWorldInput(text: string): WorldInput {
+  const t = text.trim()
+  if (isShareCode(t) || t.startsWith('{')) return { kind: 'text', text: t }
+  const id = parseWorldHash(t.includes('#') ? t.slice(t.indexOf('#')) : `#/world/${t.toLowerCase()}`)
+  return id ? { kind: 'id', id } : { kind: 'invalid', message: NOT_A_WORLD }
 }

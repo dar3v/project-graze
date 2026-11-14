@@ -12,7 +12,7 @@ and writes the same stores. Switching from orbit to walk changes only
 | --- | --- | --- | --- |
 | `worldConfig` | `appState.ts` | seed, band center, water share, relief, roughness, valley | this visit |
 | `terrainVersion` | `appState.ts` | "Reset terrain" counter | this visit |
-| `terrainFor(...)` cache | `appState.ts` | generated heightmap plus brush edits (edited in place) | this visit |
+| world terrain (`terrainFor`, `openSavedWorld`, `toSavedWorld`) | `worldTerrain.ts` | base heightmap, brush edits (edited in place), recipe and the elevation range it was built in | this visit |
 | `selectedCell`, `probeOpen` | `appState.ts` (re-exports `sandbox/selection.ts`) | the probed cell | this visit |
 | `viewMode` | `appState.ts` | `'orbit'` or `'walk'` | this visit |
 | `settings` | `settings.ts` | quality preset, time of day, auto-cycle, overlay, low-trust toggle, motion | per viewer, in browser storage |

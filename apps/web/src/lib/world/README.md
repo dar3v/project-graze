@@ -20,7 +20,7 @@ is three-free and unit-tested. Import it here through `./terrain.ts`.
 | `sky.ts`, `water.ts` | Sky dome and water surface shaders |
 | `terrainMaterial.ts` | Slope rock/dirt and shoreline blending on the terrain |
 | `quality.ts` | Low / medium / high presets and the frame-rate guard (three-free, tested) |
-| `share.ts` | `exportWorld()`, `importWorld()` and the offline share code (three-free, tested) |
+| `share.ts` | the offline share code (`exportShareCode()`, `importWorld()`) and `readWorldInput()` (three-free, tested). Terrain to saved world and back is `state/worldTerrain.ts` |
 | `colors.ts` | Vertex colors for the terrain, cover, confidence and OOD overlays (three-free, tested) |
 | `coords.ts` | Cell to world coordinate mapping (tested) |
 | `batcher.ts` | Debounced `onHeightmapChange(dirtyRect)` (tested) |
