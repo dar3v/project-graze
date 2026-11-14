@@ -92,6 +92,24 @@ Each item is done only when every checkbox is ticked.
 - [ ] Model frozen. Final test set evaluated once
 - [ ] Final `model.json` and `model_card.json` committed and tagged
 
+### D10. Inference support for walk mode
+- [ ] The Worker API exposes `predictOne` (for the HUD cell underfoot: class index, probabilities, confidence, ood flag) and `predictBatch` (for the full 128x128 grid), documented with the same shapes as the shared contract
+- [ ] Measure and record, with the machine named: full-grid `predictBatch` time, `predictOne` time, and model load time. Record these in `docs/notes.md` as measured values, never estimates
+- [ ] If the full-grid batch is too slow for brush editing, document the fallback (predict only the dirty region from `onHeightmapChange(dirtyRect)`), and add a test that the dirty-region result equals the full-grid result for the same cells
+- [ ] Class order and class names in `model_card.json` are a stable contract: vegetation meshes and tints in ROLE-1 D9 are keyed by class index. Any reorder or change requires telling Roles 1 and 2 first and bumping the model version
+- [ ] Optional: short display labels per class in `model_card.json` for the HUD (colors stay in the app's palette file, since the model card has no color field)
+
+### D11. Model versioning and compatibility
+- [ ] `model_card.json` and `model.json` carry a `modelVersion` and a `schemaVersion`
+- [ ] Saved worlds from ROLE-2 D12 store `modelVersion`; document what the app should do on mismatch (re-predict and show a notice)
+- [ ] Changelog section in `docs/model-card.md` recording what changed between versions and why
+
+### D12. Documentation for the walkable world
+- [ ] `docs/model-card.md` and `docs/dataset-card.md`: add a "How predictions are shown" section stating that walk-mode vegetation and overlays are a visualization of predicted classes on generated terrain, that generated terrain is not real terrain, and that the OOD flag marks low-trust cells
+- [ ] Report the OOD flag rate on generated terrain across several seeds and the default generation options, so Role 1 can tune how OOD cells look and so the report is honest about how much of a generated world is low-trust. These numbers are measured, never estimated
+- [ ] Add the walk-mode caveat to the limitations content that feeds the Model Report page
+- [ ] Humans write the interpretation
+
 ---
 
 ## Tonight (definition of done)
@@ -117,15 +135,26 @@ This spike is the most important one tonight. If TypeScript training is painful,
 | 13 | Write the ML sections of the presentation script from real results |
 | 14 | Buffer |
 
+### Extended scope
+
+Team is ahead of the original schedule above. These are targets, not a new
+freeze. Day 12 freeze (D9), Day 13 presentation script, and Day 14 buffer stay
+where they are.
+
+| Target order | Deliverable |
+| --- | --- |
+| First (target) | D10 inference support (it unblocks walk mode) |
+| Next (target) | D11 model versioning |
+| Next (target) | D12 walkable-world documentation, during the existing Day 11-12 documentation days |
+
 ---
 
 ## Cut order (if behind)
 
-1. Random forest or MLP (keep one flexible model plus softmax and baselines)
-2. Permutation importance
-3. Extra ablations (keep terrain-only vs. all features)
+1. D11 changelog polish
+2. Optional per-class display labels (D10)
 
-**Never cut:** baselines, leave-one-wilderness-area-out evaluation, the OOD detector, the limitations content, the leakage test.
+**Never cut:** baselines, leave-one-wilderness-area-out evaluation, the OOD detector, the limitations content, the leakage test, stable class order, measured latency numbers.
 
 ---
 
@@ -137,6 +166,9 @@ This spike is the most important one tonight. If TypeScript training is painful,
 - Why the neural net did or didn't beat the simpler models
 - What the OOD detector measures, how the threshold was chosen, and what it cannot catch
 - How preprocessing is identical in training and in the app
+- Why the HUD can show a prediction instantly in walk mode, and how the latency was measured
+- What happens when a saved world meets a newer model
+- Why a good-looking walk-mode world is not evidence the model is accurate
 
 ---
 
@@ -147,3 +179,12 @@ This spike is the most important one tonight. If TypeScript training is painful,
 - "Done" means typecheck and tests pass.
 - Tests required: feature computation on a known heightmap, model inference against stored fixtures, split leakage.
 - Agents draft code and docs; humans write the interpretation.
+
+---
+
+## Needs from other roles
+
+| Role | Needed |
+| --- | --- |
+| Role 2 (App and Sim) | Confirm the Worker message names (`predictBatch`, `predictOne`, `explainOne`) before D10 freezes them. |
+| Role 1 (World) | Send the default generation options used for the OOD-rate report in D12. |
