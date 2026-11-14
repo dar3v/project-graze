@@ -267,7 +267,7 @@ Decision for you: the background is display-only and doesn't respond to clicks, 
 
 - Sandbox uses Role 1's 3D `WorldView`: brush, overlays (cover, confidence, OOD), click-to-probe and herds drawn in 3D. The 2D placeholder map is no longer on the page.
 - Stub removed (D2): `stub.ts`, `ALLOW_STUB_MODEL`, the banner and the `stub` flags are gone. Missing model files are a visible error.
-- Model inputs are computed with `@graze/features` `heightmapToSamples` so the hillshade uses Role 3's fitted `SUN`. Role 1's `computeCellInputs` still has the old sun angles, which was train/serve skew. **Needs Role 1:** switch `packages/sim/terrain` to the fitted `SUN`.
+- Model inputs are computed with `@graze/features` so the hillshade uses Role 3's fitted `SUN`. Follow-up (same day): the drifted copies in `packages/sim/terrain` and the placeholder were deleted; `heightmapToInputs` is the only implementation. **Needs Role 1 and Role 3 review.**
 - New "Elevation" slider (band center). Default 40%, because the 50% band predicts 99% Lodgepole Pine.
 - Checked: typecheck, 91 tests, build, and headless Firefox at 1280 px and 390 px (map renders, batch predicts, sim runs, probe opens, no horizontal scroll, no app errors).
 - Still open: sensitivity from Role 3's explain function (none exists yet), human-written limitations and Responsible Use text, Cloudflare Pages deploy, demo video.

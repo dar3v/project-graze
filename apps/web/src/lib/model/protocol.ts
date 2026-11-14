@@ -9,7 +9,7 @@
  *   explainOne { id, sample }      explainOneResult { id, explanation }
  *                                  error { id, message }
  *
- * `inputs` is a Float32Array of n * RAW_INPUT_DIM values in RAW_INPUT_KEYS
+ * `inputs` is a Float32Array of n * TERRAIN_SAMPLE_DIM values in TERRAIN_SAMPLE_KEYS
  * order (transferred, not copied).
  */
 

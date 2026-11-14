@@ -3,7 +3,7 @@
   import ProbBars from '../components/ProbBars.svelte'
   import { explainOne } from '../model/client.ts'
   import type { Explanation } from '../model/engine.ts'
-  import { RAW_INPUT_KEYS, type RawInputKey } from '../model/inputs.ts'
+  import { TERRAIN_SAMPLE_KEYS, type TerrainSampleKey } from '../deps/features.ts'
   import { inputSpec, type ModelCard } from '../model/modelCard.ts'
   import { emptyForm, formatNumber, sampleToForm, validateForm, type FormValues, type ValidationResult } from '../model/validation.ts'
   import type { CellSelection } from '../sandbox/selection.ts'
@@ -16,7 +16,7 @@
 
   let { card, selection, onclose }: Props = $props()
 
-  let values: Record<RawInputKey, string> = $state({ ...emptyForm() })
+  let values: Record<TerrainSampleKey, string> = $state({ ...emptyForm() })
   let checked: ValidationResult | null = $state(null)
   let explanation: Explanation | null = $state(null)
   let busy = $state(false)
@@ -67,7 +67,7 @@
     runError = null
   }
 
-  function rangeHint(key: RawInputKey): string {
+  function rangeHint(key: TerrainSampleKey): string {
     const s = inputSpec(card, key)
     const u = s.unit ? ` ${s.unit}` : ''
     return `training range ${formatNumber(s.min)} to ${formatNumber(s.max)}${u}`
@@ -96,7 +96,7 @@
 
   <form onsubmit={submit} novalidate>
     <div class="grid">
-      {#each RAW_INPUT_KEYS as key (key)}
+      {#each TERRAIN_SAMPLE_KEYS as key (key)}
         {@const spec = inputSpec(card, key)}
         {@const err = checked?.errors[key]}
         {@const warn = checked?.warnings[key]}

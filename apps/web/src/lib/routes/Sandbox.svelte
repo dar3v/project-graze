@@ -1,11 +1,10 @@
 <script lang="ts">
   import { onDestroy } from 'svelte'
   import { modelStatus, predictBatch } from '../model/client.ts'
-  import { sampleFromBuffer } from '../model/inputs.ts'
+  import { heightmapToInputs, sampleAt } from '../deps/features.ts'
+  import type { TerrainInputs } from '../deps/features.ts'
   import { inputSpec } from '../model/modelCard.ts'
   import SiteProbe from '../probe/SiteProbe.svelte'
-  import { packCellInputs } from '../sandbox/cellInputs.ts'
-  import type { PackedCellInputs } from '../sandbox/cellInputs.ts'
   import { classColor } from '../sandbox/palette.ts'
   import { selectCell, selectedCell } from '../sandbox/selection.ts'
   import SimPanel from '../sim/SimPanel.svelte'
@@ -65,14 +64,14 @@
 
   const waterLevel = $derived(heightM ? waterLevelForShare(heightM, waterShare / 100) : 0)
 
-  let cells: PackedCellInputs | null = $state.raw(null)
+  let cells: TerrainInputs | null = $state.raw(null)
   $effect(() => {
-    if (heightM) cells = packCellInputs(heightM, GRID, CELL_SIZE_M, waterLevel)
+    if (heightM) cells = heightmapToInputs(heightM, { size: GRID, cellSizeM: CELL_SIZE_M, waterLevelM: waterLevel })
   })
 
   function onHeightmapChange(): void {
     // Water distance is global, so the whole grid is recomputed (~16k cells).
-    if (heightM) cells = packCellInputs(heightM, GRID, CELL_SIZE_M, waterLevel)
+    if (heightM) cells = heightmapToInputs(heightM, { size: GRID, cellSizeM: CELL_SIZE_M, waterLevelM: waterLevel })
     // Refresh an open probe so it shows the sculpted cell, not stale values.
     const sel = $selectedCell
     if (probeOpen && sel && cells) pick(sel.x, sel.y)
@@ -86,7 +85,7 @@
     const c = cells
     if (!c) return
     clearTimeout(timer)
-    timer = setTimeout(() => runBatch(c.inputs), DEBOUNCE_MS)
+    timer = setTimeout(() => runBatch(c.packed), DEBOUNCE_MS)
   })
 
   async function runBatch(inputs: Float32Array): Promise<void> {
@@ -113,7 +112,7 @@
   function pick(x: number, y: number): void {
     if (!cells) return
     const i = y * GRID + x
-    selectCell({ x, y, sample: sampleFromBuffer(cells.inputs, i), water: cells.water[i] === 1 })
+    selectCell({ x, y, sample: sampleAt(cells.packed, i), water: cells.water[i] === 1 })
     probeOpen = true
   }
 

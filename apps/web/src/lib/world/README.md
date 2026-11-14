@@ -9,7 +9,7 @@ is three-free and unit-tested. Import it here through `./terrain.ts`.
 | --- | --- |
 | `index.ts` | `mountWorld(target, { reducedMotion })` for the page background (picked up by `../backdrop/WorldBackdrop.svelte`), plus re-exports |
 | `scene.ts` | `WorldRenderer`: the three.js scene. Draws what it is given and has no sim or model logic |
-| `WorldView.svelte` | Interactive sandbox view with tools, overlay select, OOD toggle and legend. Drop-in for `../sandbox/MapView.svelte` |
+| `WorldView.svelte` | Interactive sandbox view with tools, overlay select, OOD toggle and legend. Used by the Sandbox page (`../routes/Sandbox.svelte`) |
 | `colors.ts` | Vertex colors for the terrain, cover, confidence and OOD overlays (three-free, tested) |
 | `coords.ts` | Cell to world coordinate mapping (tested) |
 | `batcher.ts` | Debounced `onHeightmapChange(dirtyRect)` (tested) |
@@ -42,7 +42,7 @@ Tests: `apps/web/test/world.test.ts` and `packages/sim/terrain/test/terrain.test
 ```
 
 The page has to keep `heightM` as a mutable array (`$state.raw`), not a
-`$derived`. Each `onheightmapchange` should recompute `computeCellInputs` and
+`$derived`. Each `onheightmapchange` should recompute `heightmapToInputs` (`@graze/features`) and
 run the existing debounced batch. Water distance is global, so the whole grid
 is recomputed, which takes about 16k cells and a few ms. The rect is padded by
 one cell because slope, aspect and hillshade use central differences. It is

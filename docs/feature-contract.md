@@ -24,7 +24,8 @@ does not redefine them.
 The Site Probe and the Worker take **raw inputs** (`TerrainSample` from
 `@graze/features`). `computeFeatures` turns them into the model's feature
 vector (aspect becomes sin and cos). Batch buffers are packed in this order,
-8 floats per cell (`apps/web/src/lib/model/inputs.ts`, `RAW_INPUT_KEYS`):
+8 floats per cell (`TERRAIN_SAMPLE_KEYS` in `@graze/features`; read and write
+cells with `sampleAt` / `packSample`):
 
 `elevation, slope, aspectDegrees, hillshade9am, hillshadeNoon, hillshade3pm, horizontalDistanceToWater, verticalDistanceToWater`
 
@@ -157,9 +158,9 @@ function, it replaces `createEngine().explainOne` in
 - **Animal positions (Role 2 → Role 1):** `getPositions(simState)` from
   `packages/sim/herd` returns `{ herbivores, predators }` as interleaved
   `Float32Array [x0, y0, x1, y1, ...]` in cell coordinates.
-- **Terrain → raw inputs:** `heightmapToSamples` in `@graze/features` (Role 3)
-  is the reference implementation, and the ML pipeline uses it. Its output
-  is the 8 raw inputs per cell. The placeholder implementation is
-  `apps/web/src/lib/sandbox/terrain.ts` (`computeCellInputs`). If Role 1
-  ships one in `packages/sim/terrain/`, the app switches to it and the
-  placeholder is deleted.
+- **Terrain → raw inputs:** `@graze/features` is the only implementation.
+  `heightmapToInputs` returns the packed `Float32Array` (the app's Worker
+  batch); `heightmapToSamples` returns one `TerrainSample` per cell in
+  float64 (the ML pipeline). Both run the same code and use the fitted
+  `SUN`. The earlier copies in `packages/sim/terrain` and the app placeholder
+  were deleted because they had drifted (old sun angles, chamfer distance).

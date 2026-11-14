@@ -6,6 +6,10 @@ export {
   sampleToVector,
   isFiniteFeatureValues,
   outOfRangeFeatureNames,
+  TERRAIN_SAMPLE_KEYS,
+  TERRAIN_SAMPLE_DIM,
+  sampleAt,
+  packSample,
 } from './features.ts'
 
 export type {
@@ -14,6 +18,7 @@ export type {
   FeatureVector,
   FeatureRanges,
   TerrainSample,
+  TerrainSampleKey,
 } from './features.ts'
 
 export {
@@ -25,7 +30,8 @@ export {
   hillshade,
   slopeAspect,
   distanceToWaterCells,
+  heightmapToInputs,
   heightmapToSamples,
 } from './terrain.ts'
 
-export type { SunPosition, TerrainInputOptions, TerrainInputs } from './terrain.ts'
+export type { SunPosition, TerrainInputOptions, TerrainInputs, TerrainSamples } from './terrain.ts'

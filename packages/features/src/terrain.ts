@@ -3,7 +3,8 @@
  *
  * Every formula here is documented in docs/feature-contract.md ("Terrain ->
  * raw inputs"). The app and the training pipeline (the hillshade check in
- * `ml/src/explore.ts`) both call these functions, so the formulas cannot drift.
+ * `ml/src/explore.ts`) both call these functions, so the formulas cannot drift. `heightmapToInputs`
+ * is the only terrain -> inputs implementation in the repo.
  *
  * Conventions (shared contract):
  *  - heightmap: row-major, index = y * size + x, meters;
@@ -13,7 +14,7 @@
  *  - slope: degrees; hillshade: 0..255 index (Covertype units).
  */
 
-import type { TerrainSample } from './features.ts'
+import { sampleAt, TERRAIN_SAMPLE_DIM, type TerrainSample } from './features.ts'
 
 const RAD = Math.PI / 180
 
@@ -167,6 +168,14 @@ export interface TerrainInputOptions {
 }
 
 export interface TerrainInputs {
+  /** size * size * TERRAIN_SAMPLE_DIM numbers in TERRAIN_SAMPLE_KEYS order. */
+  readonly packed: Float32Array
+  /** 1 where the cell is under the water level. */
+  readonly water: Uint8Array
+  readonly hasWater: boolean
+}
+
+export interface TerrainSamples {
   readonly samples: TerrainSample[]
   /** 1 where the cell is under the water level. */
   readonly water: Uint8Array
@@ -174,7 +183,9 @@ export interface TerrainInputs {
 }
 
 /**
- * Heightmap -> one raw TerrainSample per cell.
+ * Heightmap -> raw model inputs for every cell, packed TERRAIN_SAMPLE_DIM
+ * numbers per cell (read one back with `sampleAt`). This is the only
+ * terrain-to-inputs implementation; the app and training both use it.
  *
  * Water distances (Covertype "nearest surface water features"):
  *  - horizontal = Euclidean distance to the nearest water cell centre, meters;
@@ -185,7 +196,31 @@ export interface TerrainInputs {
  *  - no water at all: horizontal = the grid diagonal in meters (largest
  *    in-map distance), vertical = height - water level.
  */
-export function heightmapToSamples(heightM: ArrayLike<number>, opts: TerrainInputOptions): TerrainInputs {
+export function heightmapToInputs(heightM: ArrayLike<number>, opts: TerrainInputOptions): TerrainInputs {
+  const packed = new Float32Array(opts.size * opts.size * TERRAIN_SAMPLE_DIM)
+  const { water, hasWater } = computeInto(heightM, opts, packed)
+  return { packed, water, hasWater }
+}
+
+/**
+ * Same as `heightmapToInputs`, as one TerrainSample per cell. Computed in
+ * float64 (no float32 rounding), which the training pipeline relies on to
+ * reproduce its reported numbers.
+ */
+export function heightmapToSamples(heightM: ArrayLike<number>, opts: TerrainInputOptions): TerrainSamples {
+  const n = opts.size * opts.size
+  const buf = new Float64Array(n * TERRAIN_SAMPLE_DIM)
+  const { water, hasWater } = computeInto(heightM, opts, buf)
+  const samples: TerrainSample[] = new Array(n)
+  for (let i = 0; i < n; i++) samples[i] = sampleAt(buf, i)
+  return { samples, water, hasWater }
+}
+
+function computeInto(
+  heightM: ArrayLike<number>,
+  opts: TerrainInputOptions,
+  out: Float32Array | Float64Array,
+): { water: Uint8Array; hasWater: boolean } {
   const { size, cellSizeM, waterLevelM } = opts
   const sun = opts.sun ?? SUN
   const n = size * size
@@ -200,23 +235,22 @@ export function heightmapToSamples(heightM: ArrayLike<number>, opts: TerrainInpu
   }
   const dist = distanceToWaterCells(water, size)
   const maxDist = Math.hypot(size, size) * cellSizeM
-  const samples: TerrainSample[] = new Array(n)
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
       const i = y * size + x
       const { slopeDeg, aspectDeg } = slopeAspect(heightM, size, cellSizeM, x, y)
       const wet = water[i] === 1
-      samples[i] = {
-        elevation: heightM[i],
-        slope: slopeDeg,
-        aspectDegrees: aspectDeg,
-        hillshade9am: hillshade(slopeDeg, aspectDeg, sun.hillshade9am),
-        hillshadeNoon: hillshade(slopeDeg, aspectDeg, sun.hillshadeNoon),
-        hillshade3pm: hillshade(slopeDeg, aspectDeg, sun.hillshade3pm),
-        horizontalDistanceToWater: wet ? 0 : hasWater ? dist[i] * cellSizeM : maxDist,
-        verticalDistanceToWater: wet ? 0 : heightM[i] - waterLevelM,
-      }
+      const o = i * TERRAIN_SAMPLE_DIM
+      // Order: TERRAIN_SAMPLE_KEYS (a test checks it via sampleAt).
+      out[o] = heightM[i]
+      out[o + 1] = slopeDeg
+      out[o + 2] = aspectDeg
+      out[o + 3] = hillshade(slopeDeg, aspectDeg, sun.hillshade9am)
+      out[o + 4] = hillshade(slopeDeg, aspectDeg, sun.hillshadeNoon)
+      out[o + 5] = hillshade(slopeDeg, aspectDeg, sun.hillshade3pm)
+      out[o + 6] = wet ? 0 : hasWater ? dist[i] * cellSizeM : maxDist
+      out[o + 7] = wet ? 0 : heightM[i] - waterLevelM
     }
   }
-  return { samples, water, hasWater }
+  return { water, hasWater }
 }

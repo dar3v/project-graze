@@ -1,27 +1,10 @@
 import assert from 'node:assert/strict'
 import { mock, test } from 'node:test'
 
-import { RAW_INPUT_KEYS } from '../src/lib/model/inputs.ts'
-import { computeCellInputs as placeholderInputs, generateHeightmap as placeholderHeight01, scaleHeightmap } from '../src/lib/sandbox/terrain.ts'
 import { DirtyRectBatcher } from '../src/lib/world/batcher.ts'
 import { CONFIDENCE_HIGH, CONFIDENCE_LOW, hexToRgb01, OOD_COLOR, writeColors } from '../src/lib/world/colors.ts'
 import type { ColorInputs } from '../src/lib/world/colors.ts'
 import { cellToWorldX, cellToWorldZ, heightToWorldY, nearestCell, worldToCell, worldToCellF } from '../src/lib/world/coords.ts'
-import { computeCellInputs, TERRAIN_INPUT_KEYS } from '../src/lib/world/terrain.ts'
-
-test('terrain inputs use the same packing order as the app (RAW_INPUT_KEYS)', () => {
-  assert.deepEqual([...TERRAIN_INPUT_KEYS], [...RAW_INPUT_KEYS])
-})
-
-test('terrain inputs match the placeholder exactly, so the app can switch 1:1', () => {
-  const size = 32
-  const h = scaleHeightmap(placeholderHeight01(3, size), 2400, 2800)
-  const a = computeCellInputs(h, size, 30, 2500)
-  const b = placeholderInputs(h, size, 30, 2500)
-  assert.deepEqual(a.inputs, b.inputs)
-  assert.deepEqual(a.water, b.water)
-  assert.equal(a.hasWater, b.hasWater)
-})
 
 test('cell <-> world coordinates round-trip; north is -Z, east is +X', () => {
   const f = { size: 128, cellSizeM: 30, baseM: 2500 }

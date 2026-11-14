@@ -6,18 +6,17 @@
  * - outside min..max (training)-> warning (prediction runs, flagged as extrapolation)
  */
 
-import type { TerrainSample } from '../deps/features.ts'
 import type { ModelCard } from './modelCard.ts'
 import { inputSpec } from './modelCard.ts'
-import { RAW_INPUT_KEYS, type RawInputKey } from './inputs.ts'
+import { TERRAIN_SAMPLE_KEYS, type TerrainSample, type TerrainSampleKey } from '../deps/features.ts'
 
-export type FormValues = Readonly<Record<RawInputKey, string>>
+export type FormValues = Readonly<Record<TerrainSampleKey, string>>
 
 export interface ValidationResult {
   /** Present only when there are no errors. */
   readonly sample?: TerrainSample
-  readonly errors: Partial<Record<RawInputKey, string>>
-  readonly warnings: Partial<Record<RawInputKey, string>>
+  readonly errors: Partial<Record<TerrainSampleKey, string>>
+  readonly warnings: Partial<Record<TerrainSampleKey, string>>
 }
 
 const NUMERIC = /^[+-]?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?$/
@@ -42,11 +41,11 @@ export function parseField(raw: string): number | string {
 }
 
 export function validateForm(values: FormValues, card: ModelCard): ValidationResult {
-  const errors: Partial<Record<RawInputKey, string>> = {}
-  const warnings: Partial<Record<RawInputKey, string>> = {}
-  const parsed: Partial<Record<RawInputKey, number>> = {}
+  const errors: Partial<Record<TerrainSampleKey, string>> = {}
+  const warnings: Partial<Record<TerrainSampleKey, string>> = {}
+  const parsed: Partial<Record<TerrainSampleKey, number>> = {}
 
-  for (const key of RAW_INPUT_KEYS) {
+  for (const key of TERRAIN_SAMPLE_KEYS) {
     const spec = inputSpec(card, key)
     const result = parseField(values[key] ?? '')
     if (typeof result === 'string') {
@@ -79,13 +78,13 @@ export function validateForm(values: FormValues, card: ModelCard): ValidationRes
 
 /** Prefill strings for the form from a terrain cell. */
 export function sampleToForm(sample: TerrainSample): FormValues {
-  const out = {} as Record<RawInputKey, string>
-  for (const key of RAW_INPUT_KEYS) out[key] = formatNumber(Math.round(sample[key] * 100) / 100)
+  const out = {} as Record<TerrainSampleKey, string>
+  for (const key of TERRAIN_SAMPLE_KEYS) out[key] = formatNumber(Math.round(sample[key] * 100) / 100)
   return out
 }
 
 export function emptyForm(): FormValues {
-  const out = {} as Record<RawInputKey, string>
-  for (const key of RAW_INPUT_KEYS) out[key] = ''
+  const out = {} as Record<TerrainSampleKey, string>
+  for (const key of TERRAIN_SAMPLE_KEYS) out[key] = ''
   return out
 }

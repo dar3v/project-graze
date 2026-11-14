@@ -1,10 +1,9 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
-import { FEATURE_NAMES } from '../src/lib/deps/features.ts'
 import { createEngine, modelPredictor } from '../src/lib/model/engine.ts'
 import { parseModelJson, predictProbs, softmax, type ModelJson } from '../src/lib/model/inference.ts'
-import { RAW_INPUT_DIM, writeSampleToBuffer } from '../src/lib/model/inputs.ts'
+import { FEATURE_NAMES, packSample, TERRAIN_SAMPLE_DIM } from '../src/lib/deps/features.ts'
 import { loadEngine, type FetchJson } from '../src/lib/model/loader.ts'
 import { parseModelCard, type ModelCard } from '../src/lib/model/modelCard.ts'
 import { rawCard, rawSoftmaxModel, SAMPLE } from './fixtures.ts'
@@ -124,10 +123,10 @@ test('detector flags unusual combinations even when every input is in range', ()
 
 test('predictBatch handles valid and invalid cells', () => {
   const engine = createEngine(card(), modelPredictor(model()))
-  const buf = new Float32Array(3 * RAW_INPUT_DIM)
-  writeSampleToBuffer(buf, 0, SAMPLE)
-  writeSampleToBuffer(buf, 1, { ...SAMPLE, elevation: 2100 })
-  writeSampleToBuffer(buf, 2, { ...SAMPLE, slope: Number.NaN })
+  const buf = new Float32Array(3 * TERRAIN_SAMPLE_DIM)
+  packSample(buf, 0, SAMPLE)
+  packSample(buf, 1, { ...SAMPLE, elevation: 2100 })
+  packSample(buf, 2, { ...SAMPLE, slope: Number.NaN })
   const r = engine.predictBatch(buf)
   assert.equal(r.classIndex[0], 0)
   assert.equal(r.classIndex[1], 2)
@@ -139,7 +138,7 @@ test('predictBatch handles valid and invalid cells', () => {
 test('explainOne returns a sentence and a sensitivity per input', () => {
   const engine = createEngine(card(), modelPredictor(model()))
   const e = engine.explainOne(SAMPLE)
-  assert.equal(e.sensitivities.length, RAW_INPUT_DIM)
+  assert.equal(e.sensitivities.length, TERRAIN_SAMPLE_DIM)
   const elev = e.sensitivities.find((s) => s.input === 'elevation')
   assert.ok(elev && elev.deltaUp[0] > 0 && elev.deltaDown[0] < 0)
   assert.match(e.sentence, /^The model predicts A \(\d+%\); it is most sensitive to elevation/)

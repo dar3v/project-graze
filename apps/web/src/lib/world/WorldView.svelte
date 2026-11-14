@@ -1,6 +1,5 @@
 <script lang="ts">
-  // Interactive 3D sandbox view (Role 1). A drop-in for the placeholder
-  // ../sandbox/MapView.svelte, plus brush and overlay controls. It renders
+  // Interactive 3D sandbox view (Role 1), with brush and overlay controls. It renders
   // what it is given; the page owns the heightmap, predictions and the sim.
   //
   // The brush edits `heightmap` IN PLACE and then calls

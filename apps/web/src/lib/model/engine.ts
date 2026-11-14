@@ -4,9 +4,8 @@
  * tested directly (test/engine.test.ts).
  */
 
-import { sampleToVector, type TerrainSample } from '../deps/features.ts'
 import { argmax, oodScore, predictProbs, type ModelJson } from './inference.ts'
-import { RAW_INPUT_DIM, RAW_INPUT_KEYS, sampleFromBuffer, type RawInputKey } from './inputs.ts'
+import { sampleAt, sampleToVector, TERRAIN_SAMPLE_DIM, TERRAIN_SAMPLE_KEYS, type TerrainSample, type TerrainSampleKey } from '../deps/features.ts'
 import type { ModelCard } from './modelCard.ts'
 import { formatNumber } from './validation.ts'
 
@@ -23,7 +22,7 @@ export interface Prediction {
   readonly probs: number[]
   readonly ood: boolean
   readonly oodReasons: string[]
-  readonly outOfRange: RawInputKey[]
+  readonly outOfRange: TerrainSampleKey[]
 }
 
 export interface BatchResult {
@@ -35,7 +34,7 @@ export interface BatchResult {
 }
 
 export interface Sensitivity {
-  readonly input: RawInputKey
+  readonly input: TerrainSampleKey
   readonly label: string
   readonly unit: string
   readonly step: number
@@ -71,14 +70,14 @@ export interface Engine {
 }
 
 export function createEngine(card: ModelCard, predictor: Predictor): Engine {
-  const specs = RAW_INPUT_KEYS.map((k) => {
+  const specs = TERRAIN_SAMPLE_KEYS.map((k) => {
     const s = card.inputs.find((i) => i.name === k)
     if (!s) throw new Error(`model card has no input "${k}"`)
     return s
   })
 
-  function outOfRange(sample: TerrainSample): RawInputKey[] {
-    return RAW_INPUT_KEYS.filter((k, i) => sample[k] < specs[i].min || sample[k] > specs[i].max)
+  function outOfRange(sample: TerrainSample): TerrainSampleKey[] {
+    return TERRAIN_SAMPLE_KEYS.filter((k, i) => sample[k] < specs[i].min || sample[k] > specs[i].max)
   }
 
   function predictOne(sample: TerrainSample): Prediction {
@@ -86,7 +85,7 @@ export function createEngine(card: ModelCard, predictor: Predictor): Engine {
     const probs = predictor.probs(features)
     const oor = outOfRange(sample)
     const reasons = oor.map((k) => {
-      const s = specs[RAW_INPUT_KEYS.indexOf(k)]
+      const s = specs[TERRAIN_SAMPLE_KEYS.indexOf(k)]
       return `${s.label} (${formatNumber(sample[k])}${s.unit ? ' ' + s.unit : ''}) is outside the range seen in training.`
     })
     const score = predictor.oodScore(features)
@@ -97,16 +96,16 @@ export function createEngine(card: ModelCard, predictor: Predictor): Engine {
   }
 
   function predictBatch(buf: Float32Array): BatchResult {
-    if (buf.length % RAW_INPUT_DIM !== 0) throw new Error(`Batch length ${buf.length} is not a multiple of ${RAW_INPUT_DIM}.`)
-    const n = buf.length / RAW_INPUT_DIM
+    if (buf.length % TERRAIN_SAMPLE_DIM !== 0) throw new Error(`Batch length ${buf.length} is not a multiple of ${TERRAIN_SAMPLE_DIM}.`)
+    const n = buf.length / TERRAIN_SAMPLE_DIM
     const classIndex = new Uint8Array(n)
     const confidence = new Float32Array(n)
     const ood = new Uint8Array(n)
     let oodCount = 0
     let invalidCount = 0
     for (let c = 0; c < n; c++) {
-      const sample = sampleFromBuffer(buf, c)
-      if (!RAW_INPUT_KEYS.every((k) => Number.isFinite(sample[k]))) {
+      const sample = sampleAt(buf, c)
+      if (!TERRAIN_SAMPLE_KEYS.every((k) => Number.isFinite(sample[k]))) {
         invalidCount++
         ood[c] = 1
         oodCount++
@@ -134,7 +133,7 @@ export function createEngine(card: ModelCard, predictor: Predictor): Engine {
     const prediction = predictOne(sample)
     const base = prediction.probs
     const k = prediction.classIndex
-    const sensitivities: Sensitivity[] = RAW_INPUT_KEYS.map((key, i) => {
+    const sensitivities: Sensitivity[] = TERRAIN_SAMPLE_KEYS.map((key, i) => {
       const spec = specs[i]
       const step = (spec.max - spec.min) * SENSITIVITY_STEP_FRACTION || 1
       const shift = (d: number): TerrainSample => {

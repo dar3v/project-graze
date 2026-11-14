@@ -4,7 +4,6 @@ import { test } from 'node:test'
 import {
   applyBrush,
   CELL_SIZE_M,
-  computeCellInputs,
   COVERTYPE_ELEVATION,
   generateHeightmap,
   generateTerrain,
@@ -12,14 +11,14 @@ import {
   padRect,
   reliefBand,
   sampleHeight,
-  TERRAIN_INPUT_DIM,
   unionRect,
   waterLevelForShare,
 } from '../src/index.ts'
+import { heightmapToInputs, TERRAIN_SAMPLE_DIM } from '../../../features/src/index.ts'
 
 const min = (a: Float32Array) => a.reduce((m, v) => Math.min(m, v), Infinity)
 const max = (a: Float32Array) => a.reduce((m, v) => Math.max(m, v), -Infinity)
-const slopeAt = (inputs: Float32Array, i: number) => inputs[i * TERRAIN_INPUT_DIM + 1]
+const slopeAt = (inputs: Float32Array, i: number) => inputs[i * TERRAIN_SAMPLE_DIM + 1]
 
 // D1: generator ---------------------------------------------------------------
 
@@ -62,7 +61,7 @@ test('a custom elevation range (from model_card.json) is respected', () => {
 test('roughness makes terrain steeper on average', () => {
   const meanSlope = (roughness: number) => {
     const t = generateTerrain({ seed: 11, roughness })
-    const { inputs } = computeCellInputs(t.heightmap, t.size, t.cellSizeM, t.waterLevelM)
+    const { packed: inputs } = heightmapToInputs(t.heightmap, { size: t.size, cellSizeM: t.cellSizeM, waterLevelM: t.waterLevelM })
     let s = 0
     for (let i = 0; i < t.size * t.size; i++) s += slopeAt(inputs, i)
     return s / (t.size * t.size)
@@ -72,7 +71,7 @@ test('roughness makes terrain steeper on average', () => {
 
 test('default terrain has dataset-like slopes (mean 8..22 degrees)', () => {
   const t = generateTerrain({ seed: 7 })
-  const { inputs } = computeCellInputs(t.heightmap, t.size, t.cellSizeM, t.waterLevelM)
+  const { packed: inputs } = heightmapToInputs(t.heightmap, { size: t.size, cellSizeM: t.cellSizeM, waterLevelM: t.waterLevelM })
   let s = 0
   for (let i = 0; i < t.size * t.size; i++) s += slopeAt(inputs, i)
   const mean = s / (t.size * t.size)
@@ -137,31 +136,3 @@ test('rect helpers and bilinear sampling', () => {
 })
 
 // Terrain -> raw inputs ---------------------------------------------------------
-
-test('cell inputs: flat land next to water', () => {
-  const size = 8
-  const h = new Float32Array(size * size).fill(100)
-  for (let y = 0; y < size; y++) h[y * size] = 50
-  const { inputs, water, hasWater } = computeCellInputs(h, size, 30, 60)
-  assert.ok(hasWater)
-  assert.equal(water[0], 1)
-  assert.equal(inputs.length, size * size * TERRAIN_INPUT_DIM)
-  const o = (3 * size + 4) * TERRAIN_INPUT_DIM
-  assert.equal(inputs[o + 1], 0) // slope
-  assert.equal(inputs[o + 6], 4 * 30) // horizontal distance
-  assert.equal(inputs[o + 7], 40) // vertical distance
-})
-
-test('aspect points downhill, clockwise from north', () => {
-  const size = 5
-  const h = new Float32Array(size * size)
-  for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) h[y * size + x] = (size - y) * 10
-  const o = (2 * size + 2) * TERRAIN_INPUT_DIM
-  assert.ok(Math.abs(computeCellInputs(h, size, 30, -1).inputs[o + 2] - 180) < 1e-6)
-})
-
-test('no water anywhere gives finite distances', () => {
-  const { inputs, hasWater } = computeCellInputs(new Float32Array(16).fill(10), 4, 30, 0)
-  assert.equal(hasWater, false)
-  assert.ok(Array.from(inputs).every(Number.isFinite))
-})

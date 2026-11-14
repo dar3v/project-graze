@@ -8,8 +8,11 @@ export {
   toFeatureVector,
   sampleToVector,
   isFiniteFeatureValues,
-  heightmapToSamples,
-  SUN,
+  heightmapToInputs,
+  TERRAIN_SAMPLE_KEYS,
+  TERRAIN_SAMPLE_DIM,
+  sampleAt,
+  packSample,
 } from '../../../../../packages/features/src/index.ts'
-export type { TerrainInputOptions, TerrainInputs } from '../../../../../packages/features/src/index.ts'
+export type { TerrainInputs, TerrainSampleKey } from '../../../../../packages/features/src/index.ts'
 export type { FeatureName, FeatureValues, FeatureVector, TerrainSample } from '../../../../../packages/features/src/index.ts'

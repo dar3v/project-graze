@@ -8,11 +8,10 @@
  * malformed the Model Report says so instead of crashing.
  */
 
-import { FEATURE_NAMES } from '../deps/features.ts'
-import { RAW_INPUT_KEYS, type RawInputKey } from './inputs.ts'
+import { FEATURE_NAMES, TERRAIN_SAMPLE_KEYS, type TerrainSampleKey } from '../deps/features.ts'
 
 export interface CardInput {
-  readonly name: RawInputKey
+  readonly name: TerrainSampleKey
   readonly label: string
   readonly unit: string
   /** Training-data range. Outside it -> plain-language warning (still predicts). */
@@ -180,7 +179,7 @@ export function parseModelCard(raw: unknown): CardResult {
         return
       }
       const where = `inputs "${inp.name}"`
-      if (!(RAW_INPUT_KEYS as readonly string[]).includes(inp.name)) errors.push(`${where} is not a known input.`)
+      if (!(TERRAIN_SAMPLE_KEYS as readonly string[]).includes(inp.name)) errors.push(`${where} is not a known input.`)
       seen.add(inp.name)
       if (!isStr(inp.label)) errors.push(`${where} needs a label.`)
       if (typeof inp.unit !== 'string') errors.push(`${where} needs a unit (use "" for none).`)
@@ -188,7 +187,7 @@ export function parseModelCard(raw: unknown): CardResult {
       if (inp.hardMin !== undefined && !isNum(inp.hardMin)) errors.push(`${where} hardMin must be a number.`)
       if (inp.hardMax !== undefined && !isNum(inp.hardMax)) errors.push(`${where} hardMax must be a number.`)
     })
-    for (const k of RAW_INPUT_KEYS) if (!seen.has(k)) errors.push(`inputs is missing a range for "${k}".`)
+    for (const k of TERRAIN_SAMPLE_KEYS) if (!seen.has(k)) errors.push(`inputs is missing a range for "${k}".`)
   }
 
   if (errors.length > 0) return { ok: false, errors }
@@ -206,7 +205,7 @@ export function parseModelCard(raw: unknown): CardResult {
   return { ok: true, card: card as unknown as ModelCard, warnings }
 }
 
-export function inputSpec(card: ModelCard, key: RawInputKey): CardInput {
+export function inputSpec(card: ModelCard, key: TerrainSampleKey): CardInput {
   const spec = card.inputs.find((i) => i.name === key)
   // parseModelCard guarantees every key is present.
   if (!spec) throw new Error(`model card has no input "${key}"`)

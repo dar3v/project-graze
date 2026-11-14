@@ -31,8 +31,8 @@ Commands: `pnpm web:dev` (the app), `pnpm test` (45 tests), `pnpm typecheck`,
 1. **Terrain to raw inputs.** A 128×128 heightmap (meters, 30 m cells) becomes
    8 raw inputs per cell: elevation, slope, aspect, three hillshades, and
    horizontal and vertical distance to water
-   (`src/lib/sandbox/terrain.ts`, `computeCellInputs`). This is a placeholder
-   until Role 1's terrain lands.
+   (`heightmapToInputs` in `@graze/features`, the only implementation; the
+   ML pipeline runs the same code).
 2. **Raw inputs to features.** `computeFeatures` from `@graze/features` turns
    aspect into sin and cos. Training uses the **same function**, so
    preprocessing cannot drift.
@@ -185,16 +185,15 @@ this on every page.
 
 - **Stub removed (Nov 14).** Missing or invalid model files are now a
   visible error; there is no fallback predictor.
-- **Terrain inputs come from `@graze/features`.** The Sandbox uses Role 1's
-  generator and `WorldView`, but packs model inputs with
-  `heightmapToSamples` (`src/lib/sandbox/cellInputs.ts`), because that is
-  where Role 3's fitted `SUN` lives. Role 1's `computeCellInputs` and the old
-  placeholder still use the earlier assumed sun angles (9am hillshade ~35
-  points off on average on the default map). Once Role 1 switches to the
-  fitted `SUN`, either function is fine.
-- **Placeholder 2D map is unused** (`sandbox/MapView.svelte`,
-  `sandbox/terrain.ts`), but Role 1's `apps/web/test/world.test.ts` still
-  imports the placeholder, so delete both together with Role 1.
+- **One terrain-inputs module.** `heightmapToInputs` in `@graze/features` is
+  the only terrain -> inputs code. The copies in `packages/sim/terrain` and
+  the app placeholder were deleted: they used the old assumed sun angles
+  (9am hillshade ~35 points off on the default map) and a chamfer water
+  distance. Outputs of the kept code were checked bit-identical before and
+  after the change.
+- **Placeholder generator remains** (`sandbox/terrain.ts`) only because
+  `ml/src/train.ts` still builds its generated-terrain evaluation with it
+  (architecture review candidate 2). The 2D `MapView` was deleted.
 - **Elevation slider.** Elevation drives the prediction most, so a fixed
   band gives a near single-class map (99% Lodgepole Pine at the 50% center).
   The Sandbox defaults to a 40% center (a Lodgepole/Ponderosa mix) and lets
@@ -232,8 +231,6 @@ this on every page.
 - **Open decision:** is the 3D background clickable? Right now it ignores
   clicks, and cells are picked on the 2D placeholder map. If the 3D world
   becomes the interactive map, it calls `selectCell({ x, y, sample, water })`.
-- Whether Role 1 ships its own terrain-to-inputs function. If so, the
-  placeholder `computeCellInputs` is deleted.
 - Animals: Role 1 reads `getPositions(simState)` to draw them in 3D.
 
 ---

@@ -5,10 +5,15 @@ import {
   SUN,
   SUN_ASTRONOMICAL,
   distanceToWaterCells,
+  heightmapToInputs,
   heightmapToSamples,
   hillshade,
+  packSample,
+  sampleAt,
   slopeAspect,
   solarPosition,
+  TERRAIN_SAMPLE_DIM,
+  TERRAIN_SAMPLE_KEYS,
 } from '../src/index.ts'
 
 const close = (a: number, b: number, eps = 1e-9) => assert.ok(Math.abs(a - b) <= eps, `${a} != ${b}`)
@@ -95,4 +100,37 @@ test('heightmapToSamples without water uses the grid diagonal, not Infinity', ()
   close(samples[4].horizontalDistanceToWater, Math.hypot(3, 3) * 30)
   close(samples[4].verticalDistanceToWater, 130)
   assert.throws(() => heightmapToSamples(new Float32Array(8), { size: 3, cellSizeM: 30, waterLevelM: 0 }))
+})
+
+test('heightmapToInputs packs the same values as heightmapToSamples, in TERRAIN_SAMPLE_KEYS order', () => {
+  const size = 9
+  const h = new Float32Array(size * size)
+  for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) h[y * size + x] = 2500 + 40 * Math.sin(x) + 25 * y
+  const opts = { size, cellSizeM: 30, waterLevelM: 2530 }
+  const { packed, water, hasWater } = heightmapToInputs(h, opts)
+  const ref = heightmapToSamples(h, opts)
+  assert.equal(packed.length, size * size * TERRAIN_SAMPLE_DIM)
+  assert.deepEqual(water, ref.water)
+  assert.equal(hasWater, ref.hasWater)
+  for (let i = 0; i < size * size; i++) {
+    const got = sampleAt(packed, i)
+    for (const k of TERRAIN_SAMPLE_KEYS) close(got[k], Math.fround(ref.samples[i][k]))
+  }
+})
+
+test('packSample and sampleAt round-trip every TerrainSample key', () => {
+  const s = {
+    elevation: 1,
+    slope: 2,
+    aspectDegrees: 3,
+    hillshade9am: 4,
+    hillshadeNoon: 5,
+    hillshade3pm: 6,
+    horizontalDistanceToWater: 7,
+    verticalDistanceToWater: 8,
+  }
+  const buf = new Float32Array(2 * TERRAIN_SAMPLE_DIM)
+  packSample(buf, 1, s)
+  assert.deepEqual(sampleAt(buf, 1), s)
+  assert.deepEqual(Array.from(buf.subarray(TERRAIN_SAMPLE_DIM)), TERRAIN_SAMPLE_KEYS.map((k) => s[k]))
 })

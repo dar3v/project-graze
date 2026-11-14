@@ -54,6 +54,52 @@ export interface TerrainSample {
   readonly verticalDistanceToWater: number
 }
 
+/**
+ * The one key order for packed terrain samples: a buffer holds
+ * TERRAIN_SAMPLE_DIM numbers per cell in this order. The Worker batch, the
+ * terrain-inputs function and the model card's `inputs` all use it.
+ */
+export const TERRAIN_SAMPLE_KEYS = [
+  'elevation',
+  'slope',
+  'aspectDegrees',
+  'hillshade9am',
+  'hillshadeNoon',
+  'hillshade3pm',
+  'horizontalDistanceToWater',
+  'verticalDistanceToWater',
+] as const satisfies readonly (keyof TerrainSample)[]
+
+export type TerrainSampleKey = (typeof TERRAIN_SAMPLE_KEYS)[number]
+
+export const TERRAIN_SAMPLE_DIM = TERRAIN_SAMPLE_KEYS.length
+
+// Compile-time guard: the key list must cover every TerrainSample field.
+type MissingSampleKey = Exclude<keyof TerrainSample, TerrainSampleKey>
+const _sampleKeysComplete: MissingSampleKey extends never ? true : false = true
+void _sampleKeysComplete
+
+/** Read cell `cell` of a packed buffer as a TerrainSample. */
+export function sampleAt(packed: ArrayLike<number>, cell: number): TerrainSample {
+  const o = cell * TERRAIN_SAMPLE_DIM
+  return {
+    elevation: packed[o],
+    slope: packed[o + 1],
+    aspectDegrees: packed[o + 2],
+    hillshade9am: packed[o + 3],
+    hillshadeNoon: packed[o + 4],
+    hillshade3pm: packed[o + 5],
+    horizontalDistanceToWater: packed[o + 6],
+    verticalDistanceToWater: packed[o + 7],
+  }
+}
+
+/** Write `sample` into cell `cell` of a packed buffer. */
+export function packSample(packed: Float32Array | Float64Array, cell: number, sample: TerrainSample): void {
+  const o = cell * TERRAIN_SAMPLE_DIM
+  for (let k = 0; k < TERRAIN_SAMPLE_DIM; k++) packed[o + k] = sample[TERRAIN_SAMPLE_KEYS[k]]
+}
+
 /** Named feature values, keyed by canonical feature name. */
 export type FeatureValues = Readonly<Record<FeatureName, number>>
 
