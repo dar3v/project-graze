@@ -1997,6 +1997,11 @@
           "flaggedRate": 0.12235357763359123,
           "detectorFlaggedRate": 0.01357673194364009,
           "outsideTrainingRangeRate": 0.10877684568995113,
+          "outsideRangeByInput": {
+            "horizontalDistanceToWater": 0.1000759464698763,
+            "hillshadeNoon": 0.008218864548257218,
+            "hillshade9am": 0.0011027843571079308
+          },
           "perSeedFlaggedRate": {
             "min": 0.010056873352753503,
             "median": 0.09120543764738522,
@@ -2011,6 +2016,11 @@
           "flaggedRate": 0.12101497775357971,
           "detectorFlaggedRate": 0.012238132063628577,
           "outsideTrainingRangeRate": 0.10877684568995113,
+          "outsideRangeByInput": {
+            "horizontalDistanceToWater": 0.1000759464698763,
+            "hillshadeNoon": 0.008218864548257218,
+            "hillshade9am": 0.0011027843571079308
+          },
           "perSeedFlaggedRate": {
             "min": 0.010056873352753503,
             "median": 0.09040782355389096,
@@ -2029,6 +2039,11 @@
           "flaggedRate": 0.16817808233429624,
           "detectorFlaggedRate": 0.05940123664434511,
           "outsideTrainingRangeRate": 0.10877684568995113,
+          "outsideRangeByInput": {
+            "horizontalDistanceToWater": 0.1000759464698763,
+            "hillshadeNoon": 0.008218864548257218,
+            "hillshade9am": 0.0011027843571079308
+          },
           "perSeedFlaggedRate": {
             "min": 0.01768622555139409,
             "median": 0.12425440421695104,
@@ -2047,6 +2062,11 @@
           "flaggedRate": 0.13295834041357882,
           "detectorFlaggedRate": 0.024181494723627676,
           "outsideTrainingRangeRate": 0.10877684568995113,
+          "outsideRangeByInput": {
+            "horizontalDistanceToWater": 0.1000759464698763,
+            "hillshadeNoon": 0.008218864548257218,
+            "hillshade9am": 0.0011027843571079308
+          },
           "perSeedFlaggedRate": {
             "min": 0.01158274379248162,
             "median": 0.09696213066999584,
@@ -2065,6 +2085,11 @@
           "flaggedRate": 0.12153515905410232,
           "detectorFlaggedRate": 0.012758313364151185,
           "outsideTrainingRangeRate": 0.10877684568995113,
+          "outsideRangeByInput": {
+            "horizontalDistanceToWater": 0.1000759464698763,
+            "hillshadeNoon": 0.008218864548257218,
+            "hillshade9am": 0.0011027843571079308
+          },
           "perSeedFlaggedRate": {
             "min": 0.009987515605493134,
             "median": 0.09082397003745318,
@@ -2083,6 +2108,11 @@
           "flaggedRate": 0.12851252423177892,
           "detectorFlaggedRate": 0.019735678541827777,
           "outsideTrainingRangeRate": 0.10877684568995113,
+          "outsideRangeByInput": {
+            "horizontalDistanceToWater": 0.1000759464698763,
+            "hillshadeNoon": 0.008218864548257218,
+            "hillshade9am": 0.0011027843571079308
+          },
           "perSeedFlaggedRate": {
             "min": 0.011027881814398668,
             "median": 0.09418782077958107,
@@ -2101,6 +2131,11 @@
           "flaggedRate": 0.14943074826346142,
           "detectorFlaggedRate": 0.04065390257351029,
           "outsideTrainingRangeRate": 0.10877684568995113,
+          "outsideRangeByInput": {
+            "horizontalDistanceToWater": 0.1000759464698763,
+            "hillshadeNoon": 0.008218864548257218,
+            "hillshade9am": 0.0011027843571079308
+          },
           "perSeedFlaggedRate": {
             "min": 0.016090997364405606,
             "median": 0.1100360660285754,
@@ -2120,6 +2155,10 @@
           "flaggedRate": 0.16164113732439547,
           "detectorFlaggedRate": 0.015893272668634106,
           "outsideTrainingRangeRate": 0.14574786465576137,
+          "outsideRangeByInput": {
+            "horizontalDistanceToWater": 0.14271694161138296,
+            "hillshadeNoon": 0.003089876925104296
+          },
           "perSeedFlaggedRate": {
             "min": 0.025038146760993203,
             "median": 0.13580246913580246,
@@ -2139,6 +2178,12 @@
           "flaggedRate": 0.10482383132195866,
           "detectorFlaggedRate": 0.049927174365376616,
           "outsideTrainingRangeRate": 0.05489665695658205,
+          "outsideRangeByInput": {
+            "hillshade9am": 0.004480510473019836,
+            "hillshadeNoon": 0.010251075045082535,
+            "hillshade3pm": 0.00004161464835622139,
+            "horizontalDistanceToWater": 0.04061936468303509
+          },
           "perSeedFlaggedRate": {
             "min": 0.04702455264253017,
             "median": 0.08260507698709946,
@@ -2157,6 +2202,10 @@
           "flaggedRate": 0.10038111949951622,
           "detectorFlaggedRate": 0.000006935750673634784,
           "outsideTrainingRangeRate": 0.10037418374884259,
+          "outsideRangeByInput": {
+            "horizontalDistanceToWater": 0.1000759464698763,
+            "hillshadeNoon": 0.0003051730296399305
+          },
           "perSeedFlaggedRate": {
             "min": 0.00006935774726036899,
             "median": 0.07948397836038285,
@@ -2175,6 +2224,12 @@
           "flaggedRate": 0.255977750111839,
           "detectorFlaggedRate": 0.14219676031086034,
           "outsideTrainingRangeRate": 0.11378098980097863,
+          "outsideRangeByInput": {
+            "hillshade9am": 0.004886236349575706,
+            "hillshadeNoon": 0.009980545219360454,
+            "horizontalDistanceToWater": 0.1000759464698763,
+            "hillshade3pm": 0.0000866968834204348
+          },
           "perSeedFlaggedRate": {
             "min": 0.09287002358163407,
             "median": 0.21636149257872103,

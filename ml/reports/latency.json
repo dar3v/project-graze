@@ -1,0 +1,59 @@
+{
+  "generatedBy": "ml/src/bench.ts",
+  "measuredAt": "2026-11-14T16:09:26.267Z",
+  "modelVersion": "0.1.0-dev",
+  "modelType": "softmax",
+  "machine": {
+    "cpu": "11th Gen Intel(R) Core(TM) i7-11700 @ 2.50GHz",
+    "logicalCores": 16,
+    "memoryGB": 31,
+    "os": "linux 7.2.11-200.fc44.x86_64",
+    "runtime": "Node v24.18.0"
+  },
+  "scope": "Node, single thread, app engine code (apps/web/src/lib/model) on the shipped model files. Excludes browser fetch, Worker startup, structured-clone/postMessage and rendering.",
+  "modelLoad": {
+    "firstLoadMs": 1.2057510000000065,
+    "warm": {
+      "runs": 50,
+      "medianMs": 0.21362400000001003,
+      "p95Ms": 0.3837819999999965,
+      "maxMs": 1.0386570000000006
+    },
+    "includes": "read both files from disk, JSON.parse, parseModelCard, parseModelJson, createEngine"
+  },
+  "heightmapToInputs": {
+    "cells": 16384,
+    "runs": 100,
+    "medianMs": 3.8075000000000045,
+    "p95Ms": 4.987858000000017,
+    "maxMs": 6.138530000000003
+  },
+  "predictBatchFullGrid": {
+    "cells": 16384,
+    "runs": 200,
+    "medianMs": 16.221136000000115,
+    "p95Ms": 18.173146000000088,
+    "maxMs": 19.173251000000164
+  },
+  "predictBatchDirtyRegion16x16": {
+    "cells": 256,
+    "runs": 200,
+    "medianMs": 0.2737329999999929,
+    "p95Ms": 0.389060999999856,
+    "maxMs": 0.5170369999996183
+  },
+  "predictOne": {
+    "runs": 100,
+    "medianMs": 0.0009690270000000964,
+    "p95Ms": 0.001165703000000576,
+    "maxMs": 0.0013809160000000703,
+    "note": "each run = 1000 calls; per-call time"
+  },
+  "explainOne": {
+    "runs": 50,
+    "medianMs": 0.01563208999999915,
+    "p95Ms": 0.01830716999999822,
+    "maxMs": 0.030147139999999125,
+    "note": "each run = 100 calls; per-call time"
+  }
+}

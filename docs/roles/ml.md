@@ -80,11 +80,11 @@ Each item is done only when every checkbox is ticked.
 - [x] `model_card.json`: class names and order, feature names and ranges, all metrics, ablations, calibration, importance, versions, citation, limitations *(limitations are an agent draft and need human review)*
 - [x] Fixture file of sample inputs with expected outputs, for the inference test *(`ml/test/fixtures/inference-fixtures.json`, checked against the app runtime)*
 - [ ] Explain function: perturbs each input and returns probability shifts (for Role 2's sensitivity bars) *(not written by Role 3; Role 2's `engine.explainOne` already does this and is tested on the real model. Decide whether that counts)*
-- [ ] Announce the Worker API to Role 2 on Day 4
+- [ ] Announce the Worker API to Role 2 on Day 4 *(draft in `docs/notes.md` section 8; a human posts it)*
 
 ### D8. Documentation (Days 11-12)
 - [x] `docs/dataset-card.md`: source, citation (Blackard, 1998; DOI 10.24432/C50K5N; CC BY 4.0), attributes, target, size, known limits *(agent draft, needs human review)*
-- [ ] `docs/model-card.md`: what it does, how it was selected, metrics, errors, limitations, intended use
+- [x] `docs/model-card.md`: what it does, how it was selected, metrics, errors, limitations, intended use *(agent draft from `model_card.json`; HUMAN sections left empty)*
 - [x] README paragraph justifying TypeScript training (shared feature code prevents train/serve drift) and noting the pipeline is small enough to port to Python
 - [ ] **Interpretation of results written by humans.** OpenCode may draft the structure; the conclusions must be yours
 
@@ -93,21 +93,21 @@ Each item is done only when every checkbox is ticked.
 - [ ] Final `model.json` and `model_card.json` committed and tagged
 
 ### D10. Inference support for walk mode
-- [ ] The Worker API exposes `predictOne` (for the HUD cell underfoot: class index, probabilities, confidence, ood flag) and `predictBatch` (for the full 128x128 grid), documented with the same shapes as the shared contract
-- [ ] Measure and record, with the machine named: full-grid `predictBatch` time, `predictOne` time, and model load time. Record these in `docs/notes.md` as measured values, never estimates
-- [ ] If the full-grid batch is too slow for brush editing, document the fallback (predict only the dirty region from `onHeightmapChange(dirtyRect)`), and add a test that the dirty-region result equals the full-grid result for the same cells
-- [ ] Class order and class names in `model_card.json` are a stable contract: vegetation meshes and tints in ROLE-1 D9 are keyed by class index. Any reorder or change requires telling Roles 1 and 2 first and bumping the model version
-- [ ] Optional: short display labels per class in `model_card.json` for the HUD (colors stay in the app's palette file, since the model card has no color field)
+- [x] The Worker API exposes `predictOne` (for the HUD cell underfoot: class index, probabilities, confidence, ood flag) and `predictBatch` (for the full 128x128 grid), documented with the same shapes as the shared contract *(Role 2's `protocol.ts`, confirmed in `docs/notes.md` section 8)*
+- [x] Measure and record, with the machine named: full-grid `predictBatch` time, `predictOne` time, and model load time. Record these in `docs/notes.md` as measured values, never estimates *(`pnpm ml:bench`, `docs/notes.md` section 9; Node, i7-11700)*
+- [x] If the full-grid batch is too slow for brush editing, document the fallback (predict only the dirty region from `onHeightmapChange(dirtyRect)`), and add a test that the dirty-region result equals the full-grid result for the same cells *(~20 ms per full-grid edit in a Worker; dirty-region path documented and tested in `ml/test/dirtyRegion.test.ts`)*
+- [x] Class order and class names in `model_card.json` are a stable contract: vegetation meshes and tints in ROLE-1 D9 are keyed by class index. Any reorder or change requires telling Roles 1 and 2 first and bumping the model version *(pinned by `ml/test/contract.test.ts`)*
+- [x] Optional: short display labels per class in `model_card.json` for the HUD (colors stay in the app's palette file, since the model card has no color field) *(`classDisplayLabels`)*
 
 ### D11. Model versioning and compatibility
-- [ ] `model_card.json` and `model.json` carry a `modelVersion` and a `schemaVersion`
-- [ ] Saved worlds from ROLE-2 D12 store `modelVersion`; document what the app should do on mismatch (re-predict and show a notice)
-- [ ] Changelog section in `docs/model-card.md` recording what changed between versions and why
+- [x] `model_card.json` and `model.json` carry a `modelVersion` and a `schemaVersion`
+- [x] Saved worlds from ROLE-2 D12 store `modelVersion`; document what the app should do on mismatch (re-predict and show a notice) *(`docs/model-card.md`, "Versioning and compatibility"; Role 2 implements it)*
+- [x] Changelog section in `docs/model-card.md` recording what changed between versions and why
 
 ### D12. Documentation for the walkable world
-- [ ] `docs/model-card.md` and `docs/dataset-card.md`: add a "How predictions are shown" section stating that walk-mode vegetation and overlays are a visualization of predicted classes on generated terrain, that generated terrain is not real terrain, and that the OOD flag marks low-trust cells
-- [ ] Report the OOD flag rate on generated terrain across several seeds and the default generation options, so Role 1 can tune how OOD cells look and so the report is honest about how much of a generated world is low-trust. These numbers are measured, never estimated
-- [ ] Add the walk-mode caveat to the limitations content that feeds the Model Report page
+- [x] `docs/model-card.md` and `docs/dataset-card.md`: add a "How predictions are shown" section stating that walk-mode vegetation and overlays are a visualization of predicted classes on generated terrain, that generated terrain is not real terrain, and that the OOD flag marks low-trust cells
+- [x] Report the OOD flag rate on generated terrain across several seeds and the default generation options, so Role 1 can tune how OOD cells look and so the report is honest about how much of a generated world is low-trust. These numbers are measured, never estimated *(20 seeds × 11 configs, `ml/reports/generated-terrain-ood.json`; Sandbox defaults 12.2%)*
+- [x] Add the walk-mode caveat to the limitations content that feeds the Model Report page
 - [ ] Humans write the interpretation
 
 ---
