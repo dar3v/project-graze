@@ -18,6 +18,13 @@ export { DEFAULT_WORLD, worldKeyOf, type WorldConfig } from './worldConfig.ts'
 
 export type ViewMode = 'orbit' | 'walk'
 
+/**
+ * What the views show about predictions: the model is loading, a batch is
+ * running, the cover map is current, there is no model, or the last batch
+ * failed. Computed by `predictionStateOf()` in model/predictionSession.ts.
+ */
+export type PredictionState = 'loading' | 'predicting' | 'ready' | 'unavailable' | 'failed'
+
 export const worldConfig = writable<WorldConfig>(DEFAULT_WORLD)
 /** Bumped by "Reset terrain": regenerates the same config and drops brush edits. */
 export const terrainVersion = writable(0)

@@ -39,7 +39,17 @@ Site Probe panel and one form:
 
 ## Prediction state
 
-The Sandbox derives one `predictionState` for every view:
+Cover maps come from the prediction session,
+`apps/web/src/lib/model/predictionSession.ts` (tested in
+`apps/web/test/prediction.test.ts`). The Sandbox hands it the terrain inputs
+whenever the terrain changes. The session debounces (250 ms), copies the
+inputs before the Worker takes the buffer, drops results that a newer request
+has overtaken, and publishes each cover map together with the inputs and
+water mask it was predicted from. The cover legend and the herd sim read
+cover and water from that one map, so a water change never pairs new water
+with an old cover map.
+
+`predictionStateOf()` gives one `predictionState` for every view:
 
 | State | When |
 | --- | --- |

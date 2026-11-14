@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte'
   import { modelStatus, predictBatch } from '../model/client.ts'
+  import { createPredictionSession, predictionStateOf } from '../model/predictionSession.ts'
   import { heightmapToInputs, sampleAt } from '../deps/features.ts'
   import type { TerrainInputs } from '../deps/features.ts'
   import { POSE_STRIDE, type InterpolatedPoses } from '../deps/herd.ts'
@@ -45,71 +46,38 @@
   // sculpting below the water line floods instead of moving the water.
   const waterLevel = $derived(waterLevelForShare(heightM, $worldConfig.waterShare))
 
+  // The live terrain inputs: the Site Probe reads them at once. The brush
+  // edits the heightmap IN PLACE (Svelte cannot see that), so a brush stroke
+  // refreshes them through onHeightmapChange; everything else through the effect.
   let cells: TerrainInputs | null = $state.raw(null)
-  $effect(() => {
+  function refreshCells(): void {
+    // Water distance is global, so the whole grid is recomputed (~16k cells, ~4 ms).
     cells = heightmapToInputs(heightM, { size: GRID, cellSizeM: CELL_SIZE_M, waterLevelM: waterLevel })
-  })
+  }
+  $effect(refreshCells)
 
-  let cover: Uint8Array | null = $state.raw(null)
-  let confidence: Float32Array | null = $state.raw(null)
-  let ood: Uint8Array | null = $state.raw(null)
-  let batchInfo: { oodCount: number; invalidCount: number } | null = $state(null)
-  let mapVersion = $state(0)
-  /** worldKeyOf() of the terrain the current cover map was predicted for. */
-  let coverWorldKey = $state('')
-  let predicting = $state(false)
-  let predictError: string | null = $state(null)
   // Poses keep their heading ([x, y, heading, ...]), so the animals face the way they move.
   let poses: InterpolatedPoses | null = $state.raw(null)
 
   function onHeightmapChange(): void {
-    // Water distance is global, so the whole grid is recomputed (~16k cells, ~4 ms).
-    cells = heightmapToInputs(heightM, { size: GRID, cellSizeM: CELL_SIZE_M, waterLevelM: waterLevel })
+    refreshCells()
     // Refresh an open probe so it shows the sculpted cell, not stale values.
     const sel = $selectedCell
     if ($probeOpen && sel) pick(sel.x, sel.y)
   }
 
-  let timer: ReturnType<typeof setTimeout> | undefined
-  let seq = 0
+  // Cover maps: debounced, stale results dropped, and each map published
+  // together with the inputs (and water mask) it was predicted from.
+  const session = createPredictionSession(predictBatch, { debounceMs: DEBOUNCE_MS })
+  const prediction = session.snapshot
+  const map = $derived($prediction.map)
 
-  // Debounced batch prediction whenever the terrain (or the model) changes.
   $effect(() => {
-    const c = cells
-    const ready = !!card
-    const key = worldKeyOf($worldConfig)
-    clearTimeout(timer)
-    if (!c || !ready) return
-    timer = setTimeout(() => runBatch(c.packed, key), DEBOUNCE_MS)
+    if (cells && card) session.request(cells, worldKeyOf($worldConfig))
+    else session.cancel()
   })
 
-  async function runBatch(inputs: Float32Array, key: string): Promise<void> {
-    const mine = ++seq
-    predicting = true
-    predictError = null
-    try {
-      const r = await predictBatch(inputs.slice()) // copy: the buffer is transferred
-      if (mine !== seq) return
-      cover = r.classIndex
-      confidence = r.confidence
-      ood = r.ood
-      batchInfo = { oodCount: r.oodCount, invalidCount: r.invalidCount }
-      coverWorldKey = key
-      mapVersion++
-    } catch (err) {
-      if (mine === seq) predictError = err instanceof Error ? err.message : String(err)
-    } finally {
-      if (mine === seq) predicting = false
-    }
-  }
-
-  /**
-   * One prediction state for every view (orbit overlay, walk HUD):
-   * loading | predicting | ready | unavailable (no model) | failed (this batch).
-   */
-  const predictionState = $derived(
-    $modelStatus.state === 'loading' ? 'loading' : $modelStatus.state === 'error' ? 'unavailable' : predictError ? 'failed' : predicting ? 'predicting' : 'ready',
-  )
+  const predictionState = $derived(predictionStateOf($modelStatus.state, $prediction))
   const busy = $derived(predictionState === 'loading' ? 'Loading the model…' : predictionState === 'predicting' ? 'Predicting…' : null)
 
   // The one selection event (D9): orbit clicks and "inspect cell underfoot"
@@ -126,12 +94,14 @@
     probeOpen.set(true)
   }
 
+  // Share of land per class, from one cover map and the water mask it was predicted with.
   const counts = $derived.by(() => {
-    if (!cover || !cells || !card || cover.length !== cells.water.length) return null
+    if (!map || !card) return null
+    const { cover, inputs } = map
     const out = new Array<number>(card.classes.length).fill(0)
     let land = 0
     for (let i = 0; i < cover.length; i++) {
-      if (cells.water[i]) continue
+      if (inputs.water[i]) continue
       out[cover[i]]++
       land++
     }
@@ -274,7 +244,7 @@
   })
 
   onDestroy(() => {
-    clearTimeout(timer)
+    session.dispose()
     window.removeEventListener('hashchange', onHash)
   })
 </script>
@@ -335,9 +305,9 @@
       waterLevelM={waterLevel}
       elevation={{ min: elevation.min, max: elevation.max }}
       classes={card?.classes ?? []}
-      {cover}
-      {confidence}
-      {ood}
+      cover={map?.cover ?? null}
+      confidence={map?.confidence ?? null}
+      ood={map?.ood ?? null}
       selected={$probeOpen ? $selectedCell : null}
       herbivores={poses?.herbivores ?? null}
       predators={poses?.predators ?? null}
@@ -371,11 +341,11 @@
     {:else if predictionState === 'loading'}
       Loading the model…
     {:else if predictionState === 'failed'}
-      <span class="err">Prediction failed: {predictError}</span>
+      <span class="err">Prediction failed: {$prediction.error}</span>
     {:else if predictionState === 'predicting'}
       Predicting {GRID * GRID} cells in the browser…
-    {:else if batchInfo && cells}
-      {GRID * GRID} cells predicted in the browser · {batchInfo.oodCount} low trust{batchInfo.invalidCount ? ` · ${batchInfo.invalidCount} invalid` : ''}{cells.hasWater
+    {:else if map}
+      {GRID * GRID} cells predicted in the browser · {map.oodCount} low trust{map.invalidCount ? ` · ${map.invalidCount} invalid` : ''}{map.inputs.hasWater
         ? ''
         : ' · no water on this map'}
     {/if}
@@ -461,7 +431,15 @@
   {/if}
 
   {#if card && cells}
-    <SimPanel size={GRID} {cover} water={cells.water} classes={card.classes} {mapVersion} worldKey={coverWorldKey} onposes={(p) => (poses = p)} />
+    <SimPanel
+      size={GRID}
+      cover={map?.cover ?? null}
+      water={map?.inputs.water ?? cells.water}
+      classes={card.classes}
+      mapVersion={map?.version ?? 0}
+      worldKey={map?.worldKey ?? ''}
+      onposes={(p) => (poses = p)}
+    />
   {/if}
 </section>
 

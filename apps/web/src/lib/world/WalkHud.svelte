@@ -5,9 +5,8 @@
   // look" prompt, touch controls, and the controls help card.
   import { PALETTE, toCss, toLinear } from './palette.ts'
   import type { WalkStatus, WorldStats } from './scene.ts'
+  import type { PredictionState } from '../state/appState.ts'
   import { compassPoint, RUN_SPEED, WADE_DEPTH_M, WALK_SPEED } from './walk.ts'
-
-  export type PredictionState = 'loading' | 'predicting' | 'ready' | 'unavailable' | 'failed'
 
   interface Props {
     status: WalkStatus

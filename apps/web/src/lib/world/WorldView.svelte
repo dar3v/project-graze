@@ -21,7 +21,7 @@
   import type { ViewMode, WalkStatus, WorldStats, WorldTool } from './scene.ts'
   import type { DirtyRect } from './terrain.ts'
   import WalkHud from './WalkHud.svelte'
-  import type { PredictionState } from './WalkHud.svelte'
+  import type { PredictionState } from '../state/appState.ts'
 
   interface Props {
     heightmap: Float32Array
