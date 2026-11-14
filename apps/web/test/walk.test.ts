@@ -8,7 +8,9 @@ import { heightmapToInputs } from '../src/lib/deps/features.ts'
 import { advanceHour, dayState, formatHour, MIN_LIGHT_ALTITUDE, wrapHour } from '../src/lib/world/daynight.ts'
 import { desaturate, luminance, PALETTE, saturation, toLinear } from '../src/lib/world/palette.ts'
 import { FpsGuard, lowerPreset, minPreset, QUALITY, TARGET_FPS } from '../src/lib/world/quality.ts'
-import { exportShareCode, exportWorld, importWorld, isShareCode, MAX_IMPORT_CHARS, SHARE_CODE_PREFIX } from '../src/lib/world/share.ts'
+import { exportShareCode, importWorld, isShareCode, MAX_IMPORT_CHARS, readWorldInput, SHARE_CODE_PREFIX } from '../src/lib/world/share.ts'
+import { restoreTerrain, toSavedWorld } from '../src/lib/state/worldTerrain.ts'
+import type { WorldTerrain } from '../src/lib/state/worldTerrain.ts'
 import { generateTerrain } from '../src/lib/world/terrain.ts'
 import {
   CHUNK_CELLS,
@@ -426,28 +428,28 @@ test('fps guard: reports only after several seconds under the target', () => {
 const ELEV = { min: 1859, max: 3858 }
 const CONFIG = { seed: 21, center: 0.4, waterShare: 0.2, relief: 0.2, roughness: 0.5, valley: 0.35 }
 
-function sculpted() {
+function sculpted(): WorldTerrain {
   const base = generateTerrain({ seed: CONFIG.seed, center: CONFIG.center, relief: CONFIG.relief, roughness: CONFIG.roughness, valley: CONFIG.valley, elevation: ELEV }).heightmap
   const heightmap = base.slice()
   for (let i = 4000; i < 4060; i++) heightmap[i] += 25 // a brush stroke
-  return { base, heightmap }
+  return { config: CONFIG, elevation: ELEV, base, heightmap }
 }
 
-test('exportWorld stores the recipe and a compact edit delta, not the heightmap', () => {
-  const { base, heightmap } = sculpted()
-  const world = exportWorld({ config: CONFIG, modelVersion: '0.1.0-dev', elevation: ELEV, base, heightmap })
+test('toSavedWorld stores the recipe and a compact edit delta, not the heightmap', () => {
+  const t = sculpted()
+  const world = toSavedWorld(t, CONFIG.waterShare, '0.1.0-dev')
   assert.equal(world.schemaVersion, 1)
   assert.equal(world.modelVersion, '0.1.0-dev')
   assert.equal(world.seed, 21)
   assert.equal(world.options.waterShare, 0.2)
   assert.equal(world.edits.length, 60 * 2, '60 edited cells, [gap, change] pairs')
   assert.ok(JSON.stringify(world).length < 1500, 'compact')
-  assert.equal(exportWorld({ config: CONFIG, modelVersion: '0.1.0-dev', elevation: ELEV, base, heightmap: base }).edits.length, 0)
+  assert.equal(toSavedWorld({ ...t, heightmap: t.base }, CONFIG.waterShare, '0.1.0-dev').edits.length, 0)
 })
 
 test('share code round trip restores the seed, the water level and the brush edits', async () => {
-  const { base, heightmap } = sculpted()
-  const world = exportWorld({ config: CONFIG, modelVersion: '0.1.0-dev', elevation: ELEV, base, heightmap })
+  const t = sculpted()
+  const world = toSavedWorld(t, CONFIG.waterShare, '0.1.0-dev')
   const code = await exportShareCode(world)
   assert.ok(code.startsWith(SHARE_CODE_PREFIX) && isShareCode(code))
   assert.match(code, /^graze1\.[A-Za-z0-9_-]+$/, 'safe to paste and to put in a link')
@@ -455,19 +457,21 @@ test('share code round trip restores the seed, the water level and the brush edi
   assert.ok(back.ok)
   if (!back.ok) return
   assert.deepEqual(back.world, world)
-  assert.equal(back.schemaVersion, 1)
-  assert.equal(back.modelVersion, '0.1.0-dev', 'surfaced so the app can re-predict and say so')
-  assert.deepEqual(back.restored.config, CONFIG)
-  assert.deepEqual(back.restored.base, base)
-  for (let i = 0; i < heightmap.length; i++) assert.ok(Math.abs(back.restored.heightmap[i] - heightmap[i]) <= 0.051)
+  assert.equal(back.world.schemaVersion, 1)
+  assert.equal(back.world.modelVersion, '0.1.0-dev', 'surfaced so the app can re-predict and say so')
+  const restored = restoreTerrain(back.world)
+  assert.deepEqual(restored.config, CONFIG)
+  assert.deepEqual(restored.base, t.base)
+  for (let i = 0; i < t.heightmap.length; i++) assert.ok(Math.abs(restored.heightmap[i] - t.heightmap[i]) <= 0.051)
   // The saved-world JSON itself is accepted too.
   const fromJson = await importWorld(JSON.stringify(world))
   assert.ok(fromJson.ok && fromJson.world.seed === 21)
 })
 
 test('importWorld: bad, damaged or oversized input gives a friendly message and never throws', async () => {
-  const { base, heightmap } = sculpted()
-  const code = await exportShareCode(exportWorld({ config: CONFIG, modelVersion: '0.1.0-dev', elevation: ELEV, base, heightmap }))
+  const t = sculpted()
+  const code = await exportShareCode(toSavedWorld(t, CONFIG.waterShare, '0.1.0-dev'))
+  const plain = toSavedWorld({ ...t, heightmap: t.base }, CONFIG.waterShare, '0.1.0-dev')
   const bad: unknown[] = [
     '',
     '   ',
@@ -482,8 +486,8 @@ test('importWorld: bad, damaged or oversized input gives a friendly message and 
     'graze0.' + btoa('not json').replace(/=+$/, ''),
     '{"schemaVersion":1}',
     '{"schemaVersion":2,"modelVersion":"1","seed":1,"size":128,"options":{},"edits":[]}',
-    JSON.stringify({ ...exportWorld({ config: CONFIG, modelVersion: '0.1.0-dev', elevation: ELEV, base, heightmap: base }), name: 'extra field' }),
-    JSON.stringify({ ...exportWorld({ config: CONFIG, modelVersion: '0.1.0-dev', elevation: ELEV, base, heightmap: base }), seed: 1.5 }),
+    JSON.stringify({ ...plain, name: 'extra field' }),
+    JSON.stringify({ ...plain, seed: 1.5 }),
     '{' + ' '.repeat(MAX_IMPORT_CHARS),
   ]
   for (const input of bad) {
@@ -497,6 +501,18 @@ test('importWorld: bad, damaged or oversized input gives a friendly message and 
   const r = await importWorld(SHARE_CODE_PREFIX + Buffer.from(bytes).toString('base64url'))
   assert.equal(r.ok, false)
   if (!r.ok) assert.match(r.message, /too large/)
+})
+
+test('readWorldInput sorts codes, JSON, links and ids, with one message for anything else', () => {
+  assert.deepEqual(readWorldInput('  graze1.abc '), { kind: 'text', text: 'graze1.abc' })
+  assert.deepEqual(readWorldInput('{"seed":1}'), { kind: 'text', text: '{"seed":1}' })
+  assert.deepEqual(readWorldInput('ABCDEFGHIJ'), { kind: 'id', id: 'abcdefghij' })
+  assert.deepEqual(readWorldInput('https://example.test/app/#/world/abcdefghij'), { kind: 'id', id: 'abcdefghij' })
+  for (const bad of ['', 'hello', 'abc', '#/world/short']) {
+    const r = readWorldInput(bad)
+    assert.equal(r.kind, 'invalid', bad)
+    if (r.kind === 'invalid') assert.match(r.message, /graze1\./)
+  }
 })
 
 test('palette helpers', () => {

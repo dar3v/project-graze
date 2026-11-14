@@ -1,32 +1,23 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte'
   import { modelStatus, predictBatch } from '../model/client.ts'
+  import { createPredictionSession, predictionStateOf } from '../model/predictionSession.ts'
   import { heightmapToInputs, sampleAt } from '../deps/features.ts'
   import type { TerrainInputs } from '../deps/features.ts'
   import { POSE_STRIDE, type InterpolatedPoses } from '../deps/herd.ts'
   import { inputSpec } from '../model/modelCard.ts'
   import SiteProbe from '../probe/SiteProbe.svelte'
   import { classColor } from '../sandbox/palette.ts'
-  import { fetchWorld, modelMismatchNotice, parseWorldHash, restoreWorld, saveWorld, worldShareHash, type RestoredWorld } from '../sandbox/worldIo.ts'
+  import { fetchWorld, modelMismatchNotice, parseWorldHash, saveWorld, worldShareHash, type SavedWorld } from '../sandbox/worldIo.ts'
   import SettingsPanel from '../settings/SettingsPanel.svelte'
   import { reducedMotion, settings } from '../state/settings.ts'
   import SimPanel from '../sim/SimPanel.svelte'
   import { helpOpen, isTypingTarget } from '../help/help.ts'
-  import {
-    installTerrain,
-    probeOpen,
-    selectCell,
-    selectedCell,
-    terrainFor,
-    terrainVersion,
-    viewMode,
-    worldConfig,
-    worldKeyOf,
-    type ViewMode,
-  } from '../state/appState.ts'
+  import { probeOpen, selectCell, selectedCell, terrainVersion, viewMode, worldConfig, worldKeyOf, type ViewMode } from '../state/appState.ts'
+  import { openSavedWorld, terrainFor, toSavedWorld } from '../state/worldTerrain.ts'
   import { PREDICTION_NOTICE, WORLD_FEATURES } from '../state/worldFeatures.ts'
   import { CELL_SIZE_M, COVERTYPE_ELEVATION, GRID, reliefBand, waterLevelForShare } from '../world/terrain.ts'
-  import { exportShareCode, exportWorld, importWorld, isShareCode } from '../world/share.ts'
+  import { exportShareCode, importWorld, readWorldInput } from '../world/share.ts'
   import WorldView from '../world/WorldView.svelte'
 
   const DEBOUNCE_MS = 250
@@ -41,83 +32,52 @@
     return { min: e.min, max: e.max }
   })
 
-  // Terrain from the shared store. The entry is cached in appState, so
+  // Terrain from the shared store. It is cached in state/worldTerrain.ts, so
   // leaving this page and coming back keeps brush edits. WorldView's brush
   // edits `entry.heightmap` IN PLACE and then calls onheightmapchange.
+  // An opened world keeps the elevation range it was saved in, which can
+  // differ from `elevation` (the model loaded now): read `entry.elevation`.
   const entry = $derived(terrainFor($worldConfig, $terrainVersion, elevation))
   const heightM = $derived(entry.heightmap)
-  const band = $derived(reliefBand(elevation, $worldConfig.relief, $worldConfig.center))
+  const band = $derived(reliefBand(entry.elevation, $worldConfig.relief, $worldConfig.center))
 
   // Water level in meters for the chosen share of cells. Recomputed when the
   // slider or the terrain identity changes, not on every brush stroke, so
   // sculpting below the water line floods instead of moving the water.
   const waterLevel = $derived(waterLevelForShare(heightM, $worldConfig.waterShare))
 
+  // The live terrain inputs: the Site Probe reads them at once. The brush
+  // edits the heightmap IN PLACE (Svelte cannot see that), so a brush stroke
+  // refreshes them through onHeightmapChange; everything else through the effect.
   let cells: TerrainInputs | null = $state.raw(null)
-  $effect(() => {
+  function refreshCells(): void {
+    // Water distance is global, so the whole grid is recomputed (~16k cells, ~4 ms).
     cells = heightmapToInputs(heightM, { size: GRID, cellSizeM: CELL_SIZE_M, waterLevelM: waterLevel })
-  })
+  }
+  $effect(refreshCells)
 
-  let cover: Uint8Array | null = $state.raw(null)
-  let confidence: Float32Array | null = $state.raw(null)
-  let ood: Uint8Array | null = $state.raw(null)
-  let batchInfo: { oodCount: number; invalidCount: number } | null = $state(null)
-  let mapVersion = $state(0)
-  /** worldKeyOf() of the terrain the current cover map was predicted for. */
-  let coverWorldKey = $state('')
-  let predicting = $state(false)
-  let predictError: string | null = $state(null)
   // Poses keep their heading ([x, y, heading, ...]), so the animals face the way they move.
   let poses: InterpolatedPoses | null = $state.raw(null)
 
   function onHeightmapChange(): void {
-    // Water distance is global, so the whole grid is recomputed (~16k cells, ~4 ms).
-    cells = heightmapToInputs(heightM, { size: GRID, cellSizeM: CELL_SIZE_M, waterLevelM: waterLevel })
+    refreshCells()
     // Refresh an open probe so it shows the sculpted cell, not stale values.
     const sel = $selectedCell
     if ($probeOpen && sel) pick(sel.x, sel.y)
   }
 
-  let timer: ReturnType<typeof setTimeout> | undefined
-  let seq = 0
+  // Cover maps: debounced, stale results dropped, and each map published
+  // together with the inputs (and water mask) it was predicted from.
+  const session = createPredictionSession(predictBatch, { debounceMs: DEBOUNCE_MS })
+  const prediction = session.snapshot
+  const map = $derived($prediction.map)
 
-  // Debounced batch prediction whenever the terrain (or the model) changes.
   $effect(() => {
-    const c = cells
-    const ready = !!card
-    const key = worldKeyOf($worldConfig)
-    clearTimeout(timer)
-    if (!c || !ready) return
-    timer = setTimeout(() => runBatch(c.packed, key), DEBOUNCE_MS)
+    if (cells && card) session.request(cells, worldKeyOf($worldConfig))
+    else session.cancel()
   })
 
-  async function runBatch(inputs: Float32Array, key: string): Promise<void> {
-    const mine = ++seq
-    predicting = true
-    predictError = null
-    try {
-      const r = await predictBatch(inputs.slice()) // copy: the buffer is transferred
-      if (mine !== seq) return
-      cover = r.classIndex
-      confidence = r.confidence
-      ood = r.ood
-      batchInfo = { oodCount: r.oodCount, invalidCount: r.invalidCount }
-      coverWorldKey = key
-      mapVersion++
-    } catch (err) {
-      if (mine === seq) predictError = err instanceof Error ? err.message : String(err)
-    } finally {
-      if (mine === seq) predicting = false
-    }
-  }
-
-  /**
-   * One prediction state for every view (orbit overlay, walk HUD):
-   * loading | predicting | ready | unavailable (no model) | failed (this batch).
-   */
-  const predictionState = $derived(
-    $modelStatus.state === 'loading' ? 'loading' : $modelStatus.state === 'error' ? 'unavailable' : predictError ? 'failed' : predicting ? 'predicting' : 'ready',
-  )
+  const predictionState = $derived(predictionStateOf($modelStatus.state, $prediction))
   const busy = $derived(predictionState === 'loading' ? 'Loading the model…' : predictionState === 'predicting' ? 'Predicting…' : null)
 
   // The one selection event (D9): orbit clicks and "inspect cell underfoot"
@@ -134,12 +94,14 @@
     probeOpen.set(true)
   }
 
+  // Share of land per class, from one cover map and the water mask it was predicted with.
   const counts = $derived.by(() => {
-    if (!cover || !cells || !card || cover.length !== cells.water.length) return null
+    if (!map || !card) return null
+    const { cover, inputs } = map
     const out = new Array<number>(card.classes.length).fill(0)
     let land = 0
     for (let i = 0; i < cover.length; i++) {
-      if (cells.water[i]) continue
+      if (inputs.water[i]) continue
       out[cover[i]]++
       land++
     }
@@ -173,11 +135,15 @@
   let codeInput = $state('')
   let copied = $state(false)
 
+  /** The world being worked on, in saved-world form (recipe, edits, model version). */
+  function currentWorld(modelVersion: string): SavedWorld {
+    return toSavedWorld(entry, $worldConfig.waterShare, modelVersion)
+  }
+
   async function save(): Promise<void> {
     if (!card) return
     shareState = { kind: 'busy', what: 'Saving…' }
-    const world = exportWorld({ config: $worldConfig, modelVersion: card.model.version, elevation, base: entry.base, heightmap: entry.heightmap })
-    const r = await saveWorld(world)
+    const r = await saveWorld(currentWorld(card.model.version))
     if (!r.ok) {
       shareState = { kind: 'error', message: r.message }
       return
@@ -204,21 +170,18 @@
       shareState = { kind: 'error', message: r.message }
       return
     }
-    showRestored(restoreWorld(r.value), r.value.modelVersion)
+    openWorld(r.value)
     loadedFrom = id
   }
 
-  /** Show a restored world (from the API or from a pasted code). */
-  function showRestored(restored: RestoredWorld, savedModelVersion: string): void {
-    // Install first, then point the store at it, so the Sandbox picks up the
-    // loaded heightmap (with its edits) instead of regenerating. Predictions
-    // are never stored: the batch effect re-predicts with the current model.
-    installTerrain(restored.config, $terrainVersion, elevation, restored.base, restored.heightmap)
-    worldConfig.set(restored.config)
+  /** Make a saved world (from the API or from a pasted code) the world being worked on. */
+  function openWorld(world: SavedWorld): void {
+    // Predictions are never stored: the batch effect re-predicts with the current model.
+    openSavedWorld(world)
     probeOpen.set(false)
     shareState = { kind: 'idle' }
     const current = card?.model.version
-    worldNotice = current ? modelMismatchNotice(savedModelVersion, current) : null
+    worldNotice = current ? modelMismatchNotice(world.modelVersion, current) : null
   }
 
   // Offline share code (ROLE-1 D13): the same saved world, compressed into
@@ -227,9 +190,8 @@
 
   async function copyCode(): Promise<void> {
     if (!card) return
-    const world = exportWorld({ config: $worldConfig, modelVersion: card.model.version, elevation, base: entry.base, heightmap: entry.heightmap })
     try {
-      await navigator.clipboard.writeText(await exportShareCode(world))
+      await navigator.clipboard.writeText(await exportShareCode(currentWorld(card.model.version)))
       codeCopied = true
       setTimeout(() => (codeCopied = false), 1500)
     } catch {
@@ -245,7 +207,7 @@
       shareState = { kind: 'error', message: r.message }
       return
     }
-    showRestored(r.restored, r.modelVersion)
+    openWorld(r.world)
     loadedFrom = null
     codeInput = ''
   }
@@ -253,21 +215,14 @@
   let loadedFrom: string | null = $state(null)
 
   function loadFromInput(): void {
-    const text = codeInput.trim()
-    if (isShareCode(text) || text.startsWith('{')) {
-      void loadCode(text)
-      return
-    }
-    const id = parseWorldHash(text.includes('#') ? text.slice(text.indexOf('#')) : `#/world/${text.toLowerCase()}`)
-    if (!id) {
-      shareState = { kind: 'error', message: 'That is not a world code. Paste a 10-character code, a whole share link, or an offline code (it starts with "graze1.").' }
-      return
-    }
-    location.hash = worldShareHash(id)
+    const input = readWorldInput(codeInput)
+    if (input.kind === 'text') void loadCode(input.text)
+    else if (input.kind === 'id') location.hash = worldShareHash(input.id)
+    else shareState = { kind: 'error', message: input.message }
   }
 
   // A world link is loaded once the model has settled (ready or failed), so
-  // the terrain is built for the final elevation range and not regenerated.
+  // the notice can compare the saved model version with the loaded one.
   let pendingId: string | null = $state(null)
 
   function onHash(): void {
@@ -289,7 +244,7 @@
   })
 
   onDestroy(() => {
-    clearTimeout(timer)
+    session.dispose()
     window.removeEventListener('hashchange', onHash)
   })
 </script>
@@ -350,9 +305,9 @@
       waterLevelM={waterLevel}
       elevation={{ min: elevation.min, max: elevation.max }}
       classes={card?.classes ?? []}
-      {cover}
-      {confidence}
-      {ood}
+      cover={map?.cover ?? null}
+      confidence={map?.confidence ?? null}
+      ood={map?.ood ?? null}
       selected={$probeOpen ? $selectedCell : null}
       herbivores={poses?.herbivores ?? null}
       predators={poses?.predators ?? null}
@@ -386,11 +341,11 @@
     {:else if predictionState === 'loading'}
       Loading the model…
     {:else if predictionState === 'failed'}
-      <span class="err">Prediction failed: {predictError}</span>
+      <span class="err">Prediction failed: {$prediction.error}</span>
     {:else if predictionState === 'predicting'}
       Predicting {GRID * GRID} cells in the browser…
-    {:else if batchInfo && cells}
-      {GRID * GRID} cells predicted in the browser · {batchInfo.oodCount} low trust{batchInfo.invalidCount ? ` · ${batchInfo.invalidCount} invalid` : ''}{cells.hasWater
+    {:else if map}
+      {GRID * GRID} cells predicted in the browser · {map.oodCount} low trust{map.invalidCount ? ` · ${map.invalidCount} invalid` : ''}{map.inputs.hasWater
         ? ''
         : ' · no water on this map'}
     {/if}
@@ -476,7 +431,15 @@
   {/if}
 
   {#if card && cells}
-    <SimPanel size={GRID} {cover} water={cells.water} classes={card.classes} {mapVersion} worldKey={coverWorldKey} onposes={(p) => (poses = p)} />
+    <SimPanel
+      size={GRID}
+      cover={map?.cover ?? null}
+      water={map?.inputs.water ?? cells.water}
+      classes={card.classes}
+      mapVersion={map?.version ?? 0}
+      worldKey={map?.worldKey ?? ''}
+      onposes={(p) => (poses = p)}
+    />
   {/if}
 </section>
 

@@ -182,7 +182,7 @@ three.js addon API.
 
 ### D13. Save, load, and share world
 **OPTIONAL.** Depends on Role 2. First thing cut.
-- [x] Client side: `exportWorld()` and `importWorld()` use the seed, generation options, and brush edits stored as a compact delta (not the full heightmap), plus a version field *(`world/share.ts`, wrapping Role 2's `buildSavedWorld` / `restoreWorld`. The version is `schemaVersion` plus `modelVersion`, as Role 2 asked; `importWorld()` returns `modelVersion`)*
+- [x] Client side: `exportWorld()` and `importWorld()` use the seed, generation options, and brush edits stored as a compact delta (not the full heightmap), plus a version field *(export is `toSavedWorld()` and open is `openSavedWorld()` in `state/worldTerrain.ts`; the code and its validation are `importWorld()` / `exportShareCode()` in `world/share.ts`. The version is `schemaVersion` plus `modelVersion`, as Role 2 asked; `importWorld()` returns the world with its `modelVersion`)*
 - [x] Seed and water level restorable from a plain `#name` style link only if it respects the hosting constraints for published pages; otherwise a share code the user pastes in *(both: Role 2's `#/world/<id>` link (agreed; needs the API) and an offline code, `graze1.…`, that needs no server)*
 - [x] Hono + D1 interface proposed for Role 2 to confirm: `POST /api/worlds` (store a world, return an id) and `GET /api/worlds/:id` (fetch it), with size limits, validation, and no personal data stored. The API and the D1 table belong to Role 2 *(confirmed and built by Role 2: `docs/worlds-api.md`)*
 - [x] Imported worlds are validated; bad or oversized data shows a friendly error and never crashes the app *(16 bad inputs and an oversized compressed code in the tests)*

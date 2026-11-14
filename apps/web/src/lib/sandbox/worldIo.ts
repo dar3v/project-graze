@@ -1,23 +1,15 @@
 /**
- * Save, load and share worlds (D12, client side). The format and its
- * validation are shared with the Worker: packages/worlds. The API is
- * documented in docs/worlds-api.md.
+ * The saved-worlds API client (D12): POST and GET a saved world, the share
+ * link hash, and the model-mismatch notice. The format and its validation
+ * are shared with the Worker: packages/worlds. The API is documented in
+ * docs/worlds-api.md. Turning a terrain into a saved world and back is
+ * ../state/worldTerrain.ts; the offline share code is ../world/share.ts.
  *
  * Only the recipe is sent: seed, generator options, elevation range, brush
  * edits as a sparse delta, and the model version. No predictions, no personal
  * data, nothing typed by the viewer.
  */
-import {
-  applyEdits,
-  encodeEdits,
-  validateWorld,
-  WORLD_SCHEMA_VERSION,
-  WORLD_SIZE,
-  type SavedWorld,
-  type StoredWorld,
-} from '../../../../../packages/worlds/src/index.ts'
-import { generateTerrain } from '../world/terrain.ts'
-import type { WorldConfig } from '../state/worldConfig.ts'
+import { validateWorld, type SavedWorld, type StoredWorld } from '../../../../../packages/worlds/src/index.ts'
 
 export { parseWorldHash, worldShareHash, WORLD_ID_PATTERN } from '../../../../../packages/worlds/src/index.ts'
 export type { SavedWorld, StoredWorld } from '../../../../../packages/worlds/src/index.ts'
@@ -30,59 +22,6 @@ export type { SavedWorld, StoredWorld } from '../../../../../packages/worlds/src
 export function worldsApiBase(): string {
   const env = (import.meta as { env?: Record<string, string | undefined> }).env
   return (env?.VITE_WORLDS_API ?? '').replace(/\/+$/, '')
-}
-
-export interface ElevationRange {
-  readonly min: number
-  readonly max: number
-}
-
-export function buildSavedWorld(
-  cfg: WorldConfig,
-  modelVersion: string,
-  elevation: ElevationRange,
-  base: Float32Array,
-  heightmap: Float32Array,
-): SavedWorld {
-  return {
-    schemaVersion: WORLD_SCHEMA_VERSION,
-    modelVersion,
-    seed: cfg.seed,
-    size: WORLD_SIZE,
-    options: {
-      center: cfg.center,
-      relief: cfg.relief,
-      roughness: cfg.roughness,
-      valley: cfg.valley,
-      waterShare: cfg.waterShare,
-      elevation: { min: elevation.min, max: elevation.max },
-    },
-    edits: encodeEdits(base, heightmap),
-  }
-}
-
-export interface RestoredWorld {
-  readonly config: WorldConfig
-  /** Regenerated from the saved recipe (saved elevation range). */
-  readonly base: Float32Array
-  /** `base` with the saved brush edits applied. */
-  readonly heightmap: Float32Array
-}
-
-/** Rebuild the terrain from a validated saved world. */
-export function restoreWorld(world: SavedWorld): RestoredWorld {
-  const o = world.options
-  const config: WorldConfig = { seed: world.seed, center: o.center, waterShare: o.waterShare, relief: o.relief, roughness: o.roughness, valley: o.valley }
-  const base = generateTerrain({
-    seed: world.seed,
-    center: o.center,
-    relief: o.relief,
-    roughness: o.roughness,
-    valley: o.valley,
-    size: world.size,
-    elevation: { min: o.elevation.min, max: o.elevation.max },
-  }).heightmap
-  return { config, base, heightmap: applyEdits(base, world.edits) }
 }
 
 /** The notice to show after loading, or null when the model versions match (D11, D12). */

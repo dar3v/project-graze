@@ -54,13 +54,15 @@ This confirms ROLE-1 D13's proposed paths unchanged. The changes needed in
 ROLE-1 are already listed in `docs/roles/app-and-sim.md` under D12:
 
 - `version` becomes `modelVersion` plus `schemaVersion`;
-- `importWorld()` must surface `modelVersion`;
-- `exportWorld()`/`importWorld()` can wrap `buildSavedWorld()` and
-  `restoreWorld()` in `apps/web/src/lib/sandbox/worldIo.ts`.
+- `importWorld()` must surface `modelVersion` (it returns the validated
+  world, and the version is `world.modelVersion`);
+- the terrain becomes a saved world with `toSavedWorld()` and is opened with
+  `openSavedWorld()`, both in `apps/web/src/lib/state/worldTerrain.ts`.
 
 ## Loading a world saved under another model
 
-`restoreWorld()` regenerates the terrain from the recipe and applies the
+`openSavedWorld()` regenerates the terrain from the recipe (in the saved
+elevation range, which the opened world keeps) and applies the
 edits. The Sandbox then predicts it again with the model it has loaded now.
 
 If `modelVersion` differs from the current `model.version`, the page shows:

@@ -2,10 +2,11 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { get } from 'svelte/store'
 
-import { installTerrain, terrainFor, viewMode, worldConfig } from '../src/lib/state/appState.ts'
+import { terrainVersion, viewMode, worldConfig } from '../src/lib/state/appState.ts'
 import { DEFAULT_SETTINGS, loadSettings, parseSettings, resolveReducedMotion, saveSettings, SETTINGS_STORAGE_KEY } from '../src/lib/state/settingsCore.ts'
 import { DEFAULT_WORLD, worldKeyOf } from '../src/lib/state/worldConfig.ts'
-import { buildSavedWorld, fetchWorld, modelMismatchNotice, restoreWorld, saveWorld } from '../src/lib/sandbox/worldIo.ts'
+import { openSavedWorld, restoreTerrain, terrainFor, toSavedWorld } from '../src/lib/state/worldTerrain.ts'
+import { fetchWorld, modelMismatchNotice, saveWorld } from '../src/lib/sandbox/worldIo.ts'
 
 const ELEV = { min: 1859, max: 3858 }
 
@@ -69,19 +70,59 @@ test('app state: switching view mode touches nothing else', () => {
   assert.equal(get(worldConfig), cfg)
 })
 
-test('saved worlds: build, restore and install reproduce the edited terrain', () => {
-  const t = terrainFor({ ...DEFAULT_WORLD, seed: 21 }, 0, ELEV)
+test('saved worlds: save, restore and open reproduce the edited terrain', () => {
+  const cfg = { ...DEFAULT_WORLD, seed: 21 }
+  const t = terrainFor(cfg, 0, ELEV)
   t.heightmap[5000] += 40
   t.heightmap[5001] -= 12.3
-  const saved = buildSavedWorld({ ...DEFAULT_WORLD, seed: 21 }, '0.1.0-dev', ELEV, t.base, t.heightmap)
+  const saved = toSavedWorld(t, cfg.waterShare, '0.1.0-dev')
   assert.equal(saved.edits.length, 4)
-  const r = restoreWorld(saved)
-  assert.deepEqual(r.config, { ...DEFAULT_WORLD, seed: 21 })
+  assert.deepEqual(saved.options.elevation, ELEV)
+  const r = restoreTerrain(saved)
+  assert.deepEqual(r.config, cfg)
+  assert.deepEqual(r.elevation, ELEV)
   assert.deepEqual(r.base, t.base)
   for (let i = 0; i < r.heightmap.length; i++) assert.ok(Math.abs(r.heightmap[i] - t.heightmap[i]) < 0.06)
 
-  installTerrain(r.config, 3, ELEV, r.base, r.heightmap)
-  assert.equal(terrainFor(r.config, 3, ELEV).heightmap, r.heightmap, 'the Sandbox picks up the loaded terrain')
+  terrainVersion.set(3)
+  const opened = openSavedWorld(saved)
+  assert.deepEqual(get(worldConfig), cfg, 'the store points at the opened recipe')
+  assert.equal(terrainFor(get(worldConfig), 3, ELEV), opened, 'the Sandbox picks up the opened terrain')
+  terrainVersion.set(0)
+})
+
+test('saved worlds: an opened world keeps its own elevation range through save and reopen', () => {
+  // Saved under one model's elevation range, opened while another model is loaded.
+  const savedRange = { min: 2000, max: 3600 }
+  const cfg = { ...DEFAULT_WORLD, seed: 33 }
+  const t = terrainFor(cfg, 0, savedRange)
+  for (let i = 6000; i < 6040; i++) t.heightmap[i] += 30
+  const saved = toSavedWorld(t, 0.2, '0.1.0')
+
+  const opened = openSavedWorld(saved)
+  // The Sandbox asks with the CURRENT model's range: the opened world is kept, not regenerated.
+  const seen = terrainFor(get(worldConfig), get(terrainVersion), ELEV)
+  assert.equal(seen, opened)
+  assert.deepEqual(seen.elevation, savedRange)
+
+  // Saving it again stores the range its base was built in, so reopening gives the same heights.
+  const resaved = toSavedWorld(seen, 0.2, '0.2.0')
+  assert.deepEqual(resaved.options.elevation, savedRange)
+  assert.deepEqual(resaved.edits, saved.edits)
+  const again = restoreTerrain(resaved)
+  for (let i = 0; i < again.heightmap.length; i++) assert.ok(Math.abs(again.heightmap[i] - t.heightmap[i]) < 0.06)
+
+  // "Reset terrain" makes a fresh terrain in the current range.
+  const reset = terrainFor(get(worldConfig), get(terrainVersion) + 1, ELEV)
+  assert.notEqual(reset, opened)
+  assert.deepEqual(reset.elevation, ELEV)
+})
+
+test('app state: a generated terrain follows the requested elevation range', () => {
+  const a = terrainFor(DEFAULT_WORLD, 5, { min: 1859, max: 3858 })
+  const b = terrainFor(DEFAULT_WORLD, 5, { min: 2000, max: 3600 })
+  assert.notEqual(a, b, 'a model with another range regenerates a generated terrain')
+  assert.deepEqual(b.elevation, { min: 2000, max: 3600 })
 })
 
 test('saved worlds: model version mismatch gives a notice', () => {
@@ -93,7 +134,7 @@ const json = (status: number, body: unknown) => new Response(JSON.stringify(body
 
 test('saveWorld / fetchWorld never throw and turn failures into messages', async () => {
   const t = terrainFor(DEFAULT_WORLD, 9, ELEV)
-  const world = buildSavedWorld(DEFAULT_WORLD, '0.1.0-dev', ELEV, t.base, t.heightmap)
+  const world = toSavedWorld(t, DEFAULT_WORLD.waterShare, '0.1.0-dev')
 
   const saved = await saveWorld(world, async () => json(201, { id: 'abcdefghij' }), '')
   assert.deepEqual(saved, { ok: true, value: { id: 'abcdefghij' } })
