@@ -5,6 +5,22 @@
 import type { ForestConfig } from './models/forest.ts'
 import type { NetworkConfig } from './models/network.ts'
 
+/**
+ * Model version (D11), written to model.json and model_card.json. Bump it
+ * whenever a re-export can change any prediction (weights, features, classes,
+ * OOD detector or threshold) and add a line to the changelog in
+ * docs/model-card.md. Class order and names are a stable contract (D10):
+ * changing them needs Roles 1 and 2 told first AND a version bump.
+ * `-dev` until the human freeze (D9).
+ */
+export const MODEL_VERSION = '0.1.0-dev'
+
+/**
+ * Shape version of model.json / model_card.json. Bump only when a field the
+ * app requires changes or is removed; new optional fields keep the version.
+ */
+export const SCHEMA_VERSION = 1
+
 /** Master seed. Every random choice derives from it via subSeed(SEED, name). */
 export const SEED = 42
 

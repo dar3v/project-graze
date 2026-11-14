@@ -11,14 +11,16 @@
  *     ml/reports/train-report.json.
  * The final test set is never touched here.
  */
+import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 
 import { FEATURE_NAMES, heightmapToSamples, sampleToVector, type TerrainSample } from '../../packages/features/src/index.ts'
-import { CELL_SIZE_M, GRID, generateHeightmap, quantile, scaleHeightmap } from '../../apps/web/src/lib/sandbox/terrain.ts'
+import { GENERATED_SEEDS, SANDBOX_WORLD, appEngine, generatedLandSamples, generatedTerrainStudy } from './generatedTerrain.ts'
 import { subSeed } from './lib/rng.ts'
 import {
   AREA_NAMES,
+  CLASS_DISPLAY_LABELS,
   CLASS_NAMES,
   COL,
   DATASET_CITATION,
@@ -48,7 +50,9 @@ import {
   IMPORTANCE_REPEATS,
   IMPORTANCE_ROWS,
   MAX_TRAIN_ROWS,
+  MODEL_VERSION,
   OOD_PERCENTILE,
+  SCHEMA_VERSION,
   SEED,
   SELECTION_TIE_MARGIN,
 } from './config.ts'
@@ -184,25 +188,6 @@ function checkSplitLock(s: Splits): void {
       if (prev[key] !== lock[key])
         throw new Error(`Final test set changed (${key}: ${prev[key]} -> ${lock[key]}). The locked test set must not move; see docs/notes.md section 4.`)
   } else writeFileSync(SPLIT_LOCK_PATH, JSON.stringify(lock, null, 2) + '\n')
-}
-
-/** Generated terrain exactly as the Sandbox page builds it today (placeholder generator). */
-const SANDBOX_RELIEF_SHARE = 0.3
-const SANDBOX_WATER_SHARE = 0.12
-const GENERATED_SEEDS = Array.from({ length: 20 }, (_, i) => i + 1)
-
-function generatedTerrainSamples(elevMin: number, elevMax: number): TerrainSample[] {
-  const mid = (elevMin + elevMax) / 2
-  const half = ((elevMax - elevMin) * SANDBOX_RELIEF_SHARE) / 2
-  const out: TerrainSample[] = []
-  for (const seed of GENERATED_SEEDS) {
-    const h = scaleHeightmap(generateHeightmap(seed, GRID), mid - half, mid + half)
-    const { samples, water } = heightmapToSamples(h, { size: GRID, cellSizeM: CELL_SIZE_M, waterLevelM: quantile(h, SANDBOX_WATER_SHARE) })
-    samples.forEach((s, i) => {
-      if (!water[i]) out.push(s)
-    })
-  }
-  return out
 }
 
 function samplesMatrix(samples: readonly TerrainSample[]): Matrix {
@@ -362,7 +347,7 @@ function main(): void {
       mahalanobisFlaggedRate: flaggedRate(mahalanobisScores(md, xVal), md.threshold),
     }
   })
-  const generated = generatedTerrainSamples(elevRange.min, elevRange.max)
+  const generated = generatedLandSamples(SANDBOX_WORLD, GENERATED_SEEDS, elevRange)
   const xGen = samplesMatrix(generated)
   const genOutOfRange =
     generated.filter((s) => inputs.some((inp) => s[inp.name] < inp.min || s[inp.name] > inp.max)).length / generated.length
@@ -375,7 +360,7 @@ function main(): void {
     mahalanobisComparison: { threshold: maha.threshold, devHoldoutFlaggedRate: flaggedRate(mahalanobisScores(maha, fd.xHold), maha.threshold) },
     loaoHeldOutArea: loaoOod,
     generatedTerrain: {
-      generator: `apps/web/src/lib/sandbox/terrain.ts placeholder, seeds ${GENERATED_SEEDS[0]}-${GENERATED_SEEDS[GENERATED_SEEDS.length - 1]}, relief ${SANDBOX_RELIEF_SHARE} of the training elevation range, water ${SANDBOX_WATER_SHARE * 100}% of cells (water cells excluded), inputs from @graze/features heightmapToSamples`,
+      generator: `packages/sim/terrain generateTerrain, ${SANDBOX_WORLD.description}, seeds ${GENERATED_SEEDS[0]}-${GENERATED_SEEDS[GENERATED_SEEDS.length - 1]} (water cells excluded), inputs from @graze/features heightmapToSamples. Detector only; the app-level rates are in walkMode below.`,
       cells: generated.length,
       standardizedFlaggedRate: genStd,
       mahalanobisFlaggedRate: genMaha,
@@ -428,12 +413,13 @@ function main(): void {
   }
   const exploration = JSON.parse(readFileSync(join(REPORTS_DIR, 'exploration.json'), 'utf8'))
   const today = new Date().toISOString().slice(0, 10)
-  const card = {
-    schemaVersion: 1,
+  const cardBase = {
+    schemaVersion: SCHEMA_VERSION,
+    modelVersion: MODEL_VERSION,
     model: {
       name: 'Project Graze habitat classifier',
       type: family,
-      version: '0.1.0-dev',
+      version: MODEL_VERSION,
       trainedAt: today,
       seed: SEED,
       selectionRule:
@@ -442,6 +428,9 @@ function main(): void {
       frozen: false,
     },
     classes: [...CLASS_NAMES],
+    classDisplayLabels: [...CLASS_DISPLAY_LABELS],
+    classOrderNote:
+      'Class indices are a stable contract: the cover map, vegetation meshes and tints are keyed by index. Reordering or renaming a class requires telling Roles 1 and 2 first and bumping modelVersion.',
     features: [...FEATURE_NAMES],
     inputs,
     dataset: {
@@ -516,7 +505,6 @@ function main(): void {
       threshold: detector.threshold,
       flaggedRate: oodStudy.devHoldoutFlaggedRate,
       heldOutAreaFlaggedRate: Object.fromEntries(loaoOod.map((o) => [o.heldOutArea, o.standardizedFlaggedRate])),
-      generatedTerrainFlaggedRate: genStd,
     },
     finalModelHoldout: { accuracy: finalHoldout.accuracy, macroF1: finalHoldout.macroF1, logLoss: finalHoldout.logLoss, note: 'Inner holdout of the dev set (also used for temperature and OOD threshold); not the locked test set.' },
     hillshade: { method: '@graze/features hillshade() with dataset-fitted sun positions', check: exploration.hillshadeCheck },
@@ -528,10 +516,35 @@ function main(): void {
       'Leave-one-area-out results vary a lot between areas; a held-out area can contain classes or elevations the training areas barely have.',
       'Generated terrain is synthetic; hillshade and water distances are computed differently from the GIS layers behind the dataset.',
       'The OOD flag is a distance from the training centre; it cannot catch inputs that look typical feature-by-feature but never occur together in real landscapes.',
+      'Walk-mode vegetation and overlays draw the predicted class of each cell of generated terrain. The terrain is not a real place, a good-looking world is not evidence that the model is accurate, and low-trust (OOD) cells are drawn differently because their predictions are guesses.',
       'Educational simulation only, not a forest-management or ecological decision tool.',
     ],
-    versions: { node: process.version, pipeline: 'ml/src (no ML libraries)', modelJsonBytes: Buffer.byteLength(modelJsonText) },
+    versions: {
+      node: process.version,
+      pipeline: 'ml/src (no ML libraries)',
+      modelJsonBytes: Buffer.byteLength(modelJsonText),
+      modelJsonSha256: createHash('sha256').update(modelJsonText).digest('hex'),
+    },
   }
+
+  // Generated terrain as the app sees it (D12): Role 1's generator, the app's
+  // inputs function, the app engine on the files being exported.
+  const walkMode = generatedTerrainStudy(appEngine(cardBase, modelJson))
+  const sandbox = walkMode.worlds.find((w) => w.name === SANDBOX_WORLD.name)!
+  const card = {
+    ...cardBase,
+    ood: {
+      ...cardBase.ood,
+      generatedTerrainFlaggedRate: sandbox.flaggedRate,
+      generatedTerrain: {
+        generator: walkMode.generator,
+        seeds: `${GENERATED_SEEDS[0]}-${GENERATED_SEEDS[GENERATED_SEEDS.length - 1]}`,
+        flagDefinition: walkMode.flagDefinition,
+        worlds: walkMode.worlds.map(({ perSeed: _p, predictedClassShare: _c, seeds: _s, ...w }) => w),
+      },
+    },
+  }
+  log(`Generated terrain (${SANDBOX_WORLD.name}): app flags ${(100 * sandbox.flaggedRate).toFixed(1)}% of land cells as low trust`)
 
   const report = {
     generatedBy: 'ml/src/train.ts',
@@ -543,7 +556,7 @@ function main(): void {
     summary,
     ablations,
     importance,
-    ood: oodStudy,
+    ood: { ...oodStudy, walkMode },
     final: { temperature, holdout: pack(finalHoldout), modelJsonBytes: Buffer.byteLength(modelJsonText) },
     runtimeSeconds: (performance.now() - t0) / 1000,
   }

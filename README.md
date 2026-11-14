@@ -182,6 +182,7 @@ module is resolved.*
 - **Estimates, not guarantees.** Predicted probabilities are estimates and can be wrong, especially for rare classes and out-of-range inputs.
 - **Class imbalance.** Two cover types dominate the data, so we report per-class metrics and macro-F1, not accuracy alone.
 - **Computed features.** Our hillshade computation may differ slightly from the dataset's original method. An ablation measures how much this matters.
+- **Walk mode is a picture of predictions.** Vegetation in walk mode and the overlays draw the model's predicted class on generated terrain, not a real place. A good-looking world is not evidence the model is accurate, and low-trust (out-of-distribution) cells are drawn differently.
 - **Privacy.** The app has no accounts and collects no personal data.
 
 ---

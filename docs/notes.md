@@ -151,7 +151,13 @@ those z-scores. This is a diagonal Mahalanobis distance divided by √d.
 - **Reported flagged rates:**
   - dev holdout;
   - each held-out wilderness area, with the detector fit without that area;
-  - cells from the Sandbox page's current generated terrain.
+  - generated terrain, as the app flags it (detector **or** an input outside
+    its training range). It is built with Role 1's `generateTerrain` at the
+    Sandbox page's opening settings and the generator defaults, seeds 1–20,
+    plus one-option sweeps. See `model_card.json` `ood.generatedTerrain` and
+    `docs/model-card.md` ("How predictions are shown"). Before 2026-11-15
+    this used the old placeholder generator at relief 0.3. The app no longer
+    runs it, so those rates did not describe what users see.
 - **What it cannot catch:** inputs that sit near the centre of each feature
   but form combinations never seen in real landscapes, and anything about
   the terrain that the 9 features don't describe.
@@ -161,9 +167,38 @@ those z-scores. This is a diagonal Mahalanobis distance divided by √d.
 
 ## 7. Open questions for humans
 
-- Sign off on sections 1–5, and write the interpretation of results
-  (D8: "conclusions must be yours").
-- Confirm with Roles 1 and 2 that `SUN` and `heightmapToSamples` in
-  `@graze/features` replace the placeholder formulas in
-  `apps/web/src/lib/sandbox/terrain.ts` and in the `world` branch's
-  `packages/sim/terrain`.
+- Sign off on sections 1–9, and write the interpretation of results
+  (D8: "conclusions must be yours"). `docs/model-card.md` has the structure
+  and the numbers. Its **HUMAN** sections are empty on purpose.
+- D7 explain: Role 2's `engine.explainOne` is a model-agnostic perturbation
+  explain (±10% of each input's training range), tested on the real model
+  in `ml/test/inference.test.ts`. Decide whether it counts as Role 3's
+  explain function. No model-specific version was written.
+- D9 freeze is human-owned. Do not run `pnpm ml:evaluate-final` until the
+  team says the model is frozen.
+- Role 2: `apps/web/src/lib/sandbox/terrain.ts` (the placeholder generator)
+  has no users left now that `ml/src/train.ts` uses Role 1's generator.
+  Its own header says it can be deleted.
+
+## 8. Worker API announcement (D7, D10) *(agent draft, 2026-11-15)*
+
+Message to Roles 1 and 2. The names follow Role 2's protocol
+(`apps/web/src/lib/model/protocol.ts`), and Role 3 confirms them as-is:
+
+> **Worker API, confirmed by Role 3.** `predictOne(sample)` returns
+> `{ classIndex, probs[7], ood, oodReasons, outOfRange }`. Confidence is
+> `probs[classIndex]`. `predictBatch(Float32Array n×8)` returns
+> `{ classIndex: Uint8Array, confidence: Float32Array, ood: Uint8Array,
+> oodCount, invalidCount }`. `explainOne(sample)` returns
+> `{ prediction, sentence, method, sensitivities }`. Inputs are raw
+> `TerrainSample` values in `TERRAIN_SAMPLE_KEYS` order. Class indices 0–6
+> follow `model_card.json` `classes`, and that order is frozen: any change
+> is announced first and bumps `modelVersion`. Short HUD names are in
+> `classDisplayLabels`. Measured latency is in `docs/notes.md` section 9.
+> Both model files now carry `modelVersion`, and a saved world should
+> store it (see `docs/model-card.md`, "Versioning and compatibility").
+
+Still to do by a human: post it to the team, and confirm with Role 2
+that `docs/feature-contract.md`'s Worker table is updated. That table still
+lists the removed `allowStub` and `stub` fields.
+

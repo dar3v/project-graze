@@ -4230,11 +4230,1680 @@
       }
     ],
     "generatedTerrain": {
-      "generator": "apps/web/src/lib/sandbox/terrain.ts placeholder, seeds 1-20, relief 0.3 of the training elevation range, water 12% of cells (water cells excluded), inputs from @graze/features heightmapToSamples",
-      "cells": 288380,
-      "standardizedFlaggedRate": 0.23704140370344684,
-      "mahalanobisFlaggedRate": 0.1994833206186282,
-      "outsideTrainingRangeRate": 0.11378042860115126
+      "generator": "packages/sim/terrain generateTerrain, Sandbox page on load: relief 0.2, band center 0.4, 12% water, roughness 0.5, valley 0.35, seeds 1-20 (water cells excluded), inputs from @graze/features heightmapToSamples. Detector only; the app-level rates are in walkMode below.",
+      "cells": 288361,
+      "standardizedFlaggedRate": 0.10524654859707103,
+      "mahalanobisFlaggedRate": 0.1234424904893519,
+      "outsideTrainingRangeRate": 0.10877684568995113
+    },
+    "walkMode": {
+      "generator": "packages/sim/terrain generateTerrain (Role 1), inputs from @graze/features heightmapToInputs, predicted by the app engine; water cells excluded",
+      "elevationRange": {
+        "min": 1859,
+        "max": 3858
+      },
+      "flagDefinition": "flaggedRate = cells the app marks low trust (OOD detector over threshold OR any input outside its training range). detectorFlaggedRate and outsideTrainingRangeRate split it and sum to flaggedRate.",
+      "worlds": [
+        {
+          "name": "sandbox-page-defaults",
+          "description": "Sandbox page on load: relief 0.2, band center 0.4, 12% water, roughness 0.5, valley 0.35",
+          "options": {
+            "relief": 0.2,
+            "center": 0.4,
+            "waterLevel": 0.12
+          },
+          "seeds": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20
+          ],
+          "landCells": 288361,
+          "flaggedRate": 0.12235357763359123,
+          "detectorFlaggedRate": 0.01357673194364009,
+          "outsideTrainingRangeRate": 0.10877684568995113,
+          "perSeedFlaggedRate": {
+            "min": 0.010056873352753503,
+            "median": 0.09120543764738522,
+            "max": 0.37938687751421835
+          },
+          "perSeed": [
+            {
+              "seed": 1,
+              "landCells": 14418,
+              "flaggedRate": 0.03280621445415453
+            },
+            {
+              "seed": 2,
+              "landCells": 14418,
+              "flaggedRate": 0.054237758357608544
+            },
+            {
+              "seed": 3,
+              "landCells": 14418,
+              "flaggedRate": 0.11846303232071022
+            },
+            {
+              "seed": 4,
+              "landCells": 14418,
+              "flaggedRate": 0.27680676931613263
+            },
+            {
+              "seed": 5,
+              "landCells": 14418,
+              "flaggedRate": 0.06013316687473991
+            },
+            {
+              "seed": 6,
+              "landCells": 14418,
+              "flaggedRate": 0.07768067693161326
+            },
+            {
+              "seed": 7,
+              "landCells": 14418,
+              "flaggedRate": 0.015119988902760438
+            },
+            {
+              "seed": 8,
+              "landCells": 14418,
+              "flaggedRate": 0.010056873352753503
+            },
+            {
+              "seed": 9,
+              "landCells": 14418,
+              "flaggedRate": 0.020946039672631433
+            },
+            {
+              "seed": 10,
+              "landCells": 14419,
+              "flaggedRate": 0.11249046397114917
+            },
+            {
+              "seed": 11,
+              "landCells": 14418,
+              "flaggedRate": 0.08766819253710639
+            },
+            {
+              "seed": 12,
+              "landCells": 14418,
+              "flaggedRate": 0.07497572478845888
+            },
+            {
+              "seed": 13,
+              "landCells": 14418,
+              "flaggedRate": 0.05028436676376751
+            },
+            {
+              "seed": 14,
+              "landCells": 14418,
+              "flaggedRate": 0.24254404216951034
+            },
+            {
+              "seed": 15,
+              "landCells": 14418,
+              "flaggedRate": 0.16070190040227494
+            },
+            {
+              "seed": 16,
+              "landCells": 14418,
+              "flaggedRate": 0.14391732556526565
+            },
+            {
+              "seed": 17,
+              "landCells": 14418,
+              "flaggedRate": 0.09474268275766404
+            },
+            {
+              "seed": 18,
+              "landCells": 14418,
+              "flaggedRate": 0.1914273824386184
+            },
+            {
+              "seed": 19,
+              "landCells": 14418,
+              "flaggedRate": 0.24268275766403108
+            },
+            {
+              "seed": 20,
+              "landCells": 14418,
+              "flaggedRate": 0.37938687751421835
+            }
+          ],
+          "predictedClassShare": [
+            0,
+            0.475282718536834,
+            0.4686382693914919,
+            0.000013871501347269568,
+            0.018556600927309864,
+            0.03750853964301691,
+            0
+          ]
+        },
+        {
+          "name": "generator-defaults",
+          "description": "generateTerrain defaults: relief 0.2, center 0.5, 12% water, roughness 0.5, valley 0.35",
+          "options": {},
+          "seeds": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20
+          ],
+          "landCells": 288361,
+          "flaggedRate": 0.12101497775357971,
+          "detectorFlaggedRate": 0.012238132063628577,
+          "outsideTrainingRangeRate": 0.10877684568995113,
+          "perSeedFlaggedRate": {
+            "min": 0.010056873352753503,
+            "median": 0.09040782355389096,
+            "max": 0.37799972256901093
+          },
+          "perSeed": [
+            {
+              "seed": 1,
+              "landCells": 14418,
+              "flaggedRate": 0.03058676654182272
+            },
+            {
+              "seed": 2,
+              "landCells": 14418,
+              "flaggedRate": 0.05181023720349563
+            },
+            {
+              "seed": 3,
+              "landCells": 14418,
+              "flaggedRate": 0.11700651962824248
+            },
+            {
+              "seed": 4,
+              "landCells": 14418,
+              "flaggedRate": 0.2763906228325704
+            },
+            {
+              "seed": 5,
+              "landCells": 14418,
+              "flaggedRate": 0.05895408517131363
+            },
+            {
+              "seed": 6,
+              "landCells": 14418,
+              "flaggedRate": 0.0767096684699681
+            },
+            {
+              "seed": 7,
+              "landCells": 14418,
+              "flaggedRate": 0.014911915660979332
+            },
+            {
+              "seed": 8,
+              "landCells": 14418,
+              "flaggedRate": 0.010056873352753503
+            },
+            {
+              "seed": 9,
+              "landCells": 14418,
+              "flaggedRate": 0.020044388958246635
+            },
+            {
+              "seed": 10,
+              "landCells": 14419,
+              "flaggedRate": 0.11075664054372703
+            },
+            {
+              "seed": 11,
+              "landCells": 14418,
+              "flaggedRate": 0.08704397281176307
+            },
+            {
+              "seed": 12,
+              "landCells": 14418,
+              "flaggedRate": 0.07331113885421002
+            },
+            {
+              "seed": 13,
+              "landCells": 14418,
+              "flaggedRate": 0.0478568456096546
+            },
+            {
+              "seed": 14,
+              "landCells": 14418,
+              "flaggedRate": 0.2408100984880011
+            },
+            {
+              "seed": 15,
+              "landCells": 14418,
+              "flaggedRate": 0.15903731446802608
+            },
+            {
+              "seed": 16,
+              "landCells": 14418,
+              "flaggedRate": 0.14322374809266195
+            },
+            {
+              "seed": 17,
+              "landCells": 14418,
+              "flaggedRate": 0.09377167429601886
+            },
+            {
+              "seed": 18,
+              "landCells": 14418,
+              "flaggedRate": 0.18934665002080733
+            },
+            {
+              "seed": 19,
+              "landCells": 14418,
+              "flaggedRate": 0.24067138299348037
+            },
+            {
+              "seed": 20,
+              "landCells": 14418,
+              "flaggedRate": 0.37799972256901093
+            }
+          ],
+          "predictedClassShare": [
+            0.001078509229750209,
+            0.9849494210382125,
+            0.009089301257798384,
+            0,
+            0.004882768474238888,
+            0,
+            0
+          ]
+        },
+        {
+          "name": "center-0.1",
+          "description": "Sandbox defaults with band center 0.1",
+          "options": {
+            "relief": 0.2,
+            "center": 0.1,
+            "waterLevel": 0.12
+          },
+          "seeds": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20
+          ],
+          "landCells": 288361,
+          "flaggedRate": 0.16817808233429624,
+          "detectorFlaggedRate": 0.05940123664434511,
+          "outsideTrainingRangeRate": 0.10877684568995113,
+          "perSeedFlaggedRate": {
+            "min": 0.01768622555139409,
+            "median": 0.12425440421695104,
+            "max": 0.431197114717714
+          },
+          "perSeed": [
+            {
+              "seed": 1,
+              "landCells": 14418,
+              "flaggedRate": 0.09418782077958109
+            },
+            {
+              "seed": 2,
+              "landCells": 14418,
+              "flaggedRate": 0.10153974198918019
+            },
+            {
+              "seed": 3,
+              "landCells": 14418,
+              "flaggedRate": 0.17942849216257456
+            },
+            {
+              "seed": 4,
+              "landCells": 14418,
+              "flaggedRate": 0.30774032459425715
+            },
+            {
+              "seed": 5,
+              "landCells": 14418,
+              "flaggedRate": 0.10230267720904425
+            },
+            {
+              "seed": 6,
+              "landCells": 14418,
+              "flaggedRate": 0.1028575391871272
+            },
+            {
+              "seed": 7,
+              "landCells": 14418,
+              "flaggedRate": 0.035164377861007075
+            },
+            {
+              "seed": 8,
+              "landCells": 14418,
+              "flaggedRate": 0.01768622555139409
+            },
+            {
+              "seed": 9,
+              "landCells": 14418,
+              "flaggedRate": 0.060896102094603964
+            },
+            {
+              "seed": 10,
+              "landCells": 14419,
+              "flaggedRate": 0.19481240030515293
+            },
+            {
+              "seed": 11,
+              "landCells": 14418,
+              "flaggedRate": 0.11485642946317104
+            },
+            {
+              "seed": 12,
+              "landCells": 14418,
+              "flaggedRate": 0.10958524067138299
+            },
+            {
+              "seed": 13,
+              "landCells": 14418,
+              "flaggedRate": 0.11485642946317104
+            },
+            {
+              "seed": 14,
+              "landCells": 14418,
+              "flaggedRate": 0.3096129837702871
+            },
+            {
+              "seed": 15,
+              "landCells": 14418,
+              "flaggedRate": 0.20613122485781663
+            },
+            {
+              "seed": 16,
+              "landCells": 14418,
+              "flaggedRate": 0.18553197392148704
+            },
+            {
+              "seed": 17,
+              "landCells": 14418,
+              "flaggedRate": 0.13365237897073104
+            },
+            {
+              "seed": 18,
+              "landCells": 14418,
+              "flaggedRate": 0.2515605493133583
+            },
+            {
+              "seed": 19,
+              "landCells": 14418,
+              "flaggedRate": 0.30995977250658896
+            },
+            {
+              "seed": 20,
+              "landCells": 14418,
+              "flaggedRate": 0.431197114717714
+            }
+          ],
+          "predictedClassShare": [
+            0,
+            0,
+            0.9275179375851796,
+            0.04402467740089679,
+            0,
+            0.02845738501392352,
+            0
+          ]
+        },
+        {
+          "name": "center-0.25",
+          "description": "Sandbox defaults with band center 0.25",
+          "options": {
+            "relief": 0.2,
+            "center": 0.25,
+            "waterLevel": 0.12
+          },
+          "seeds": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20
+          ],
+          "landCells": 288361,
+          "flaggedRate": 0.13295834041357882,
+          "detectorFlaggedRate": 0.024181494723627676,
+          "outsideTrainingRangeRate": 0.10877684568995113,
+          "perSeedFlaggedRate": {
+            "min": 0.01158274379248162,
+            "median": 0.09696213066999584,
+            "max": 0.3918019142738244
+          },
+          "perSeed": [
+            {
+              "seed": 1,
+              "landCells": 14418,
+              "flaggedRate": 0.04508253571923984
+            },
+            {
+              "seed": 2,
+              "landCells": 14418,
+              "flaggedRate": 0.0679705923151616
+            },
+            {
+              "seed": 3,
+              "landCells": 14418,
+              "flaggedRate": 0.13379109446525178
+            },
+            {
+              "seed": 4,
+              "landCells": 14418,
+              "flaggedRate": 0.2817311693716188
+            },
+            {
+              "seed": 5,
+              "landCells": 14418,
+              "flaggedRate": 0.06609793313913163
+            },
+            {
+              "seed": 6,
+              "landCells": 14418,
+              "flaggedRate": 0.08544874462477459
+            },
+            {
+              "seed": 7,
+              "landCells": 14418,
+              "flaggedRate": 0.018587876265778888
+            },
+            {
+              "seed": 8,
+              "landCells": 14418,
+              "flaggedRate": 0.01158274379248162
+            },
+            {
+              "seed": 9,
+              "landCells": 14418,
+              "flaggedRate": 0.03010126231100014
+            },
+            {
+              "seed": 10,
+              "landCells": 14419,
+              "flaggedRate": 0.1322560510437617
+            },
+            {
+              "seed": 11,
+              "landCells": 14418,
+              "flaggedRate": 0.09287002358163407
+            },
+            {
+              "seed": 12,
+              "landCells": 14418,
+              "flaggedRate": 0.08648911083368012
+            },
+            {
+              "seed": 13,
+              "landCells": 14418,
+              "flaggedRate": 0.06852545429324455
+            },
+            {
+              "seed": 14,
+              "landCells": 14418,
+              "flaggedRate": 0.25884311277569705
+            },
+            {
+              "seed": 15,
+              "landCells": 14418,
+              "flaggedRate": 0.1717297822166736
+            },
+            {
+              "seed": 16,
+              "landCells": 14418,
+              "flaggedRate": 0.1527257594673325
+            },
+            {
+              "seed": 17,
+              "landCells": 14418,
+              "flaggedRate": 0.1010542377583576
+            },
+            {
+              "seed": 18,
+              "landCells": 14418,
+              "flaggedRate": 0.20509085864891108
+            },
+            {
+              "seed": 19,
+              "landCells": 14418,
+              "flaggedRate": 0.2573866000832293
+            },
+            {
+              "seed": 20,
+              "landCells": 14418,
+              "flaggedRate": 0.3918019142738244
+            }
+          ],
+          "predictedClassShare": [
+            0,
+            0,
+            0.9021434937456868,
+            0.008250075426288576,
+            0,
+            0.0896064308280246,
+            0
+          ]
+        },
+        {
+          "name": "center-0.55",
+          "description": "Sandbox defaults with band center 0.55",
+          "options": {
+            "relief": 0.2,
+            "center": 0.55,
+            "waterLevel": 0.12
+          },
+          "seeds": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20
+          ],
+          "landCells": 288361,
+          "flaggedRate": 0.12153515905410232,
+          "detectorFlaggedRate": 0.012758313364151185,
+          "outsideTrainingRangeRate": 0.10877684568995113,
+          "perSeedFlaggedRate": {
+            "min": 0.009987515605493134,
+            "median": 0.09082397003745318,
+            "max": 0.37869330004161467
+          },
+          "perSeed": [
+            {
+              "seed": 1,
+              "landCells": 14418,
+              "flaggedRate": 0.031210986267166042
+            },
+            {
+              "seed": 2,
+              "landCells": 14418,
+              "flaggedRate": 0.05215702593979748
+            },
+            {
+              "seed": 3,
+              "landCells": 14418,
+              "flaggedRate": 0.1176307393535858
+            },
+            {
+              "seed": 4,
+              "landCells": 14418,
+              "flaggedRate": 0.27652933832709115
+            },
+            {
+              "seed": 5,
+              "landCells": 14418,
+              "flaggedRate": 0.059023442918574004
+            },
+            {
+              "seed": 6,
+              "landCells": 14418,
+              "flaggedRate": 0.07719517270079068
+            },
+            {
+              "seed": 7,
+              "landCells": 14418,
+              "flaggedRate": 0.014911915660979332
+            },
+            {
+              "seed": 8,
+              "landCells": 14418,
+              "flaggedRate": 0.009987515605493134
+            },
+            {
+              "seed": 9,
+              "landCells": 14418,
+              "flaggedRate": 0.020599250936329586
+            },
+            {
+              "seed": 10,
+              "landCells": 14419,
+              "flaggedRate": 0.11124211110340523
+            },
+            {
+              "seed": 11,
+              "landCells": 14418,
+              "flaggedRate": 0.08739076154806492
+            },
+            {
+              "seed": 12,
+              "landCells": 14418,
+              "flaggedRate": 0.07407407407407407
+            },
+            {
+              "seed": 13,
+              "landCells": 14418,
+              "flaggedRate": 0.04979886253294493
+            },
+            {
+              "seed": 14,
+              "landCells": 14418,
+              "flaggedRate": 0.2412956027188237
+            },
+            {
+              "seed": 15,
+              "landCells": 14418,
+              "flaggedRate": 0.15924538770980717
+            },
+            {
+              "seed": 16,
+              "landCells": 14418,
+              "flaggedRate": 0.14412539880704675
+            },
+            {
+              "seed": 17,
+              "landCells": 14418,
+              "flaggedRate": 0.09425717852684144
+            },
+            {
+              "seed": 18,
+              "landCells": 14418,
+              "flaggedRate": 0.18934665002080733
+            },
+            {
+              "seed": 19,
+              "landCells": 14418,
+              "flaggedRate": 0.24198918019142737
+            },
+            {
+              "seed": 20,
+              "landCells": 14418,
+              "flaggedRate": 0.37869330004161467
+            }
+          ],
+          "predictedClassShare": [
+            0.019968026189394545,
+            0.9782633573888286,
+            0.0006588963139953045,
+            0,
+            0.0011097201077815654,
+            0,
+            0
+          ]
+        },
+        {
+          "name": "center-0.7",
+          "description": "Sandbox defaults with band center 0.7",
+          "options": {
+            "relief": 0.2,
+            "center": 0.7,
+            "waterLevel": 0.12
+          },
+          "seeds": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20
+          ],
+          "landCells": 288361,
+          "flaggedRate": 0.12851252423177892,
+          "detectorFlaggedRate": 0.019735678541827777,
+          "outsideTrainingRangeRate": 0.10877684568995113,
+          "perSeedFlaggedRate": {
+            "min": 0.011027881814398668,
+            "median": 0.09418782077958107,
+            "max": 0.3866694409765571
+          },
+          "perSeed": [
+            {
+              "seed": 1,
+              "landCells": 14418,
+              "flaggedRate": 0.04112914412539881
+            },
+            {
+              "seed": 2,
+              "landCells": 14418,
+              "flaggedRate": 0.0597170203911777
+            },
+            {
+              "seed": 3,
+              "landCells": 14418,
+              "flaggedRate": 0.12865862116798446
+            },
+            {
+              "seed": 4,
+              "landCells": 14418,
+              "flaggedRate": 0.28020529893189067
+            },
+            {
+              "seed": 5,
+              "landCells": 14418,
+              "flaggedRate": 0.06075738660008323
+            },
+            {
+              "seed": 6,
+              "landCells": 14418,
+              "flaggedRate": 0.08232764599805799
+            },
+            {
+              "seed": 7,
+              "landCells": 14418,
+              "flaggedRate": 0.01643778610070745
+            },
+            {
+              "seed": 8,
+              "landCells": 14418,
+              "flaggedRate": 0.011027881814398668
+            },
+            {
+              "seed": 9,
+              "landCells": 14418,
+              "flaggedRate": 0.02871410736579276
+            },
+            {
+              "seed": 10,
+              "landCells": 14419,
+              "flaggedRate": 0.12587558083084818
+            },
+            {
+              "seed": 11,
+              "landCells": 14418,
+              "flaggedRate": 0.09030378693300041
+            },
+            {
+              "seed": 12,
+              "landCells": 14418,
+              "flaggedRate": 0.08260507698709946
+            },
+            {
+              "seed": 13,
+              "landCells": 14418,
+              "flaggedRate": 0.06762380357885976
+            },
+            {
+              "seed": 14,
+              "landCells": 14418,
+              "flaggedRate": 0.2495491746428076
+            },
+            {
+              "seed": 15,
+              "landCells": 14418,
+              "flaggedRate": 0.16285199056734637
+            },
+            {
+              "seed": 16,
+              "landCells": 14418,
+              "flaggedRate": 0.15168539325842698
+            },
+            {
+              "seed": 17,
+              "landCells": 14418,
+              "flaggedRate": 0.09807185462616175
+            },
+            {
+              "seed": 18,
+              "landCells": 14418,
+              "flaggedRate": 0.1936468303509502
+            },
+            {
+              "seed": 19,
+              "landCells": 14418,
+              "flaggedRate": 0.25239284228048275
+            },
+            {
+              "seed": 20,
+              "landCells": 14418,
+              "flaggedRate": 0.3866694409765571
+            }
+          ],
+          "predictedClassShare": [
+            0.7258887297519429,
+            0.19224860504714578,
+            0,
+            0,
+            0,
+            0,
+            0.08186266520091136
+          ]
+        },
+        {
+          "name": "center-0.85",
+          "description": "Sandbox defaults with band center 0.85",
+          "options": {
+            "relief": 0.2,
+            "center": 0.85,
+            "waterLevel": 0.12
+          },
+          "seeds": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20
+          ],
+          "landCells": 288361,
+          "flaggedRate": 0.14943074826346142,
+          "detectorFlaggedRate": 0.04065390257351029,
+          "outsideTrainingRangeRate": 0.10877684568995113,
+          "perSeedFlaggedRate": {
+            "min": 0.016090997364405606,
+            "median": 0.1100360660285754,
+            "max": 0.40595089471493967
+          },
+          "perSeed": [
+            {
+              "seed": 1,
+              "landCells": 14418,
+              "flaggedRate": 0.07476765154667776
+            },
+            {
+              "seed": 2,
+              "landCells": 14418,
+              "flaggedRate": 0.08100984880011097
+            },
+            {
+              "seed": 3,
+              "landCells": 14418,
+              "flaggedRate": 0.16000832292967124
+            },
+            {
+              "seed": 4,
+              "landCells": 14418,
+              "flaggedRate": 0.299625468164794
+            },
+            {
+              "seed": 5,
+              "landCells": 14418,
+              "flaggedRate": 0.07435150506311555
+            },
+            {
+              "seed": 6,
+              "landCells": 14418,
+              "flaggedRate": 0.09474268275766404
+            },
+            {
+              "seed": 7,
+              "landCells": 14418,
+              "flaggedRate": 0.027118879178804272
+            },
+            {
+              "seed": 8,
+              "landCells": 14418,
+              "flaggedRate": 0.016090997364405606
+            },
+            {
+              "seed": 9,
+              "landCells": 14418,
+              "flaggedRate": 0.05208766819253711
+            },
+            {
+              "seed": 10,
+              "landCells": 14419,
+              "flaggedRate": 0.16686316665510784
+            },
+            {
+              "seed": 11,
+              "landCells": 14418,
+              "flaggedRate": 0.1006380912747954
+            },
+            {
+              "seed": 12,
+              "landCells": 14418,
+              "flaggedRate": 0.09800249687890138
+            },
+            {
+              "seed": 13,
+              "landCells": 14418,
+              "flaggedRate": 0.09807185462616175
+            },
+            {
+              "seed": 14,
+              "landCells": 14418,
+              "flaggedRate": 0.27756970453599666
+            },
+            {
+              "seed": 15,
+              "landCells": 14418,
+              "flaggedRate": 0.1771396865029824
+            },
+            {
+              "seed": 16,
+              "landCells": 14418,
+              "flaggedRate": 0.17027326952420585
+            },
+            {
+              "seed": 17,
+              "landCells": 14418,
+              "flaggedRate": 0.1194340407823554
+            },
+            {
+              "seed": 18,
+              "landCells": 14418,
+              "flaggedRate": 0.2177833263975586
+            },
+            {
+              "seed": 19,
+              "landCells": 14418,
+              "flaggedRate": 0.2770842003051741
+            },
+            {
+              "seed": 20,
+              "landCells": 14418,
+              "flaggedRate": 0.40595089471493967
+            }
+          ],
+          "predictedClassShare": [
+            0.00005201813005226088,
+            0.0024483199877930787,
+            0,
+            0,
+            0,
+            0,
+            0.9974996618821547
+          ]
+        },
+        {
+          "name": "roughness-0",
+          "description": "Sandbox defaults with roughness 0",
+          "options": {
+            "relief": 0.2,
+            "center": 0.4,
+            "waterLevel": 0.12,
+            "roughness": 0
+          },
+          "seeds": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20
+          ],
+          "landCells": 288361,
+          "flaggedRate": 0.16164113732439547,
+          "detectorFlaggedRate": 0.015893272668634106,
+          "outsideTrainingRangeRate": 0.14574786465576137,
+          "perSeedFlaggedRate": {
+            "min": 0.025038146760993203,
+            "median": 0.13580246913580246,
+            "max": 0.4102919758651779
+          },
+          "perSeed": [
+            {
+              "seed": 1,
+              "landCells": 14418,
+              "flaggedRate": 0.08954085171313636
+            },
+            {
+              "seed": 2,
+              "landCells": 14418,
+              "flaggedRate": 0.11659037314468026
+            },
+            {
+              "seed": 3,
+              "landCells": 14418,
+              "flaggedRate": 0.190040227493411
+            },
+            {
+              "seed": 4,
+              "landCells": 14418,
+              "flaggedRate": 0.2732001664585934
+            },
+            {
+              "seed": 5,
+              "landCells": 14418,
+              "flaggedRate": 0.05465390484117076
+            },
+            {
+              "seed": 6,
+              "landCells": 14418,
+              "flaggedRate": 0.0896795672076571
+            },
+            {
+              "seed": 7,
+              "landCells": 14418,
+              "flaggedRate": 0.12449715633236233
+            },
+            {
+              "seed": 8,
+              "landCells": 14418,
+              "flaggedRate": 0.12803440144264114
+            },
+            {
+              "seed": 9,
+              "landCells": 14418,
+              "flaggedRate": 0.025038146760993203
+            },
+            {
+              "seed": 10,
+              "landCells": 14418,
+              "flaggedRate": 0.13115550006935775
+            },
+            {
+              "seed": 11,
+              "landCells": 14418,
+              "flaggedRate": 0.1511998890276044
+            },
+            {
+              "seed": 12,
+              "landCells": 14418,
+              "flaggedRate": 0.06873352753502567
+            },
+            {
+              "seed": 13,
+              "landCells": 14418,
+              "flaggedRate": 0.11506450270495214
+            },
+            {
+              "seed": 14,
+              "landCells": 14418,
+              "flaggedRate": 0.2573172423359689
+            },
+            {
+              "seed": 15,
+              "landCells": 14418,
+              "flaggedRate": 0.1677070328755722
+            },
+            {
+              "seed": 16,
+              "landCells": 14418,
+              "flaggedRate": 0.16007768067693162
+            },
+            {
+              "seed": 17,
+              "landCells": 14418,
+              "flaggedRate": 0.1404494382022472
+            },
+            {
+              "seed": 18,
+              "landCells": 14418,
+              "flaggedRate": 0.19933416562630046
+            },
+            {
+              "seed": 19,
+              "landCells": 14418,
+              "flaggedRate": 0.34019975031210986
+            },
+            {
+              "seed": 20,
+              "landCells": 14419,
+              "flaggedRate": 0.4102919758651779
+            }
+          ],
+          "predictedClassShare": [
+            0,
+            0.4337271683757512,
+            0.5213534423864531,
+            0.000013871501347269568,
+            0.006228304104924036,
+            0.038677213631524376,
+            0
+          ]
+        },
+        {
+          "name": "roughness-1",
+          "description": "Sandbox defaults with roughness 1",
+          "options": {
+            "relief": 0.2,
+            "center": 0.4,
+            "waterLevel": 0.12,
+            "roughness": 1
+          },
+          "seeds": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20
+          ],
+          "landCells": 288360,
+          "flaggedRate": 0.10482383132195866,
+          "detectorFlaggedRate": 0.049927174365376616,
+          "outsideTrainingRangeRate": 0.05489665695658205,
+          "perSeedFlaggedRate": {
+            "min": 0.04702455264253017,
+            "median": 0.08260507698709946,
+            "max": 0.28277153558052437
+          },
+          "perSeed": [
+            {
+              "seed": 1,
+              "landCells": 14418,
+              "flaggedRate": 0.07178526841448189
+            },
+            {
+              "seed": 2,
+              "landCells": 14418,
+              "flaggedRate": 0.08669718407546123
+            },
+            {
+              "seed": 3,
+              "landCells": 14418,
+              "flaggedRate": 0.07851296989873768
+            },
+            {
+              "seed": 4,
+              "landCells": 14418,
+              "flaggedRate": 0.13406852545429324
+            },
+            {
+              "seed": 5,
+              "landCells": 14418,
+              "flaggedRate": 0.060896102094603964
+            },
+            {
+              "seed": 6,
+              "landCells": 14418,
+              "flaggedRate": 0.04702455264253017
+            },
+            {
+              "seed": 7,
+              "landCells": 14418,
+              "flaggedRate": 0.06942710500762936
+            },
+            {
+              "seed": 8,
+              "landCells": 14418,
+              "flaggedRate": 0.05083922874185046
+            },
+            {
+              "seed": 9,
+              "landCells": 14418,
+              "flaggedRate": 0.06339298099597725
+            },
+            {
+              "seed": 10,
+              "landCells": 14418,
+              "flaggedRate": 0.06852545429324455
+            },
+            {
+              "seed": 11,
+              "landCells": 14418,
+              "flaggedRate": 0.10722707726453044
+            },
+            {
+              "seed": 12,
+              "landCells": 14418,
+              "flaggedRate": 0.10882230545151894
+            },
+            {
+              "seed": 13,
+              "landCells": 14418,
+              "flaggedRate": 0.06568178665556942
+            },
+            {
+              "seed": 14,
+              "landCells": 14418,
+              "flaggedRate": 0.16007768067693162
+            },
+            {
+              "seed": 15,
+              "landCells": 14418,
+              "flaggedRate": 0.05867665418227216
+            },
+            {
+              "seed": 16,
+              "landCells": 14418,
+              "flaggedRate": 0.08961020946039673
+            },
+            {
+              "seed": 17,
+              "landCells": 14418,
+              "flaggedRate": 0.10403662089055347
+            },
+            {
+              "seed": 18,
+              "landCells": 14418,
+              "flaggedRate": 0.23789707310306563
+            },
+            {
+              "seed": 19,
+              "landCells": 14418,
+              "flaggedRate": 0.1505063115550007
+            },
+            {
+              "seed": 20,
+              "landCells": 14418,
+              "flaggedRate": 0.28277153558052437
+            }
+          ],
+          "predictedClassShare": [
+            0,
+            0.4789776668053822,
+            0.4246774864752393,
+            0.000006935774726036898,
+            0.050100568733527535,
+            0.04623734221112498,
+            0
+          ]
+        },
+        {
+          "name": "relief-0.1",
+          "description": "Sandbox defaults with relief 0.1",
+          "options": {
+            "relief": 0.1,
+            "center": 0.4,
+            "waterLevel": 0.12
+          },
+          "seeds": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20
+          ],
+          "landCells": 288361,
+          "flaggedRate": 0.10038111949951622,
+          "detectorFlaggedRate": 0.000006935750673634784,
+          "outsideTrainingRangeRate": 0.10037418374884259,
+          "perSeedFlaggedRate": {
+            "min": 0.00006935774726036899,
+            "median": 0.07948397836038285,
+            "max": 0.363157164655292
+          },
+          "perSeed": [
+            {
+              "seed": 1,
+              "landCells": 14418,
+              "flaggedRate": 0.0009016507143847968
+            },
+            {
+              "seed": 2,
+              "landCells": 14418,
+              "flaggedRate": 0.01629907060618671
+            },
+            {
+              "seed": 3,
+              "landCells": 14418,
+              "flaggedRate": 0.08912470522957415
+            },
+            {
+              "seed": 4,
+              "landCells": 14418,
+              "flaggedRate": 0.2667498959633791
+            },
+            {
+              "seed": 5,
+              "landCells": 14418,
+              "flaggedRate": 0.04459703148841725
+            },
+            {
+              "seed": 6,
+              "landCells": 14418,
+              "flaggedRate": 0.06353169649049799
+            },
+            {
+              "seed": 7,
+              "landCells": 14418,
+              "flaggedRate": 0.00006935774726036899
+            },
+            {
+              "seed": 8,
+              "landCells": 14418,
+              "flaggedRate": 0.00006935774726036899
+            },
+            {
+              "seed": 9,
+              "landCells": 14418,
+              "flaggedRate": 0.0033291718684977114
+            },
+            {
+              "seed": 10,
+              "landCells": 14419,
+              "flaggedRate": 0.08613634787433248
+            },
+            {
+              "seed": 11,
+              "landCells": 14418,
+              "flaggedRate": 0.07525315577750034
+            },
+            {
+              "seed": 12,
+              "landCells": 14418,
+              "flaggedRate": 0.03675960604799556
+            },
+            {
+              "seed": 13,
+              "landCells": 14418,
+              "flaggedRate": 0.01435705368289638
+            },
+            {
+              "seed": 14,
+              "landCells": 14418,
+              "flaggedRate": 0.2150783742544042
+            },
+            {
+              "seed": 15,
+              "landCells": 14418,
+              "flaggedRate": 0.14717713968650298
+            },
+            {
+              "seed": 16,
+              "landCells": 14418,
+              "flaggedRate": 0.1303925648494937
+            },
+            {
+              "seed": 17,
+              "landCells": 14418,
+              "flaggedRate": 0.08371480094326536
+            },
+            {
+              "seed": 18,
+              "landCells": 14418,
+              "flaggedRate": 0.16035511166597308
+            },
+            {
+              "seed": 19,
+              "landCells": 14418,
+              "flaggedRate": 0.21057012068248024
+            },
+            {
+              "seed": 20,
+              "landCells": 14418,
+              "flaggedRate": 0.363157164655292
+            }
+          ],
+          "predictedClassShare": [
+            0,
+            0.7302443811749855,
+            0.26929092352988093,
+            0,
+            0.0004300165417653566,
+            0.00003467875336817392,
+            0
+          ]
+        },
+        {
+          "name": "relief-0.3",
+          "description": "Sandbox defaults with relief 0.3",
+          "options": {
+            "relief": 0.3,
+            "center": 0.4,
+            "waterLevel": 0.12
+          },
+          "seeds": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20
+          ],
+          "landCells": 288361,
+          "flaggedRate": 0.255977750111839,
+          "detectorFlaggedRate": 0.14219676031086034,
+          "outsideTrainingRangeRate": 0.11378098980097863,
+          "perSeedFlaggedRate": {
+            "min": 0.09287002358163407,
+            "median": 0.21636149257872103,
+            "max": 0.4957691774171175
+          },
+          "perSeed": [
+            {
+              "seed": 1,
+              "landCells": 14418,
+              "flaggedRate": 0.2686225551394091
+            },
+            {
+              "seed": 2,
+              "landCells": 14418,
+              "flaggedRate": 0.21272021084755166
+            },
+            {
+              "seed": 3,
+              "landCells": 14418,
+              "flaggedRate": 0.317866555694271
+            },
+            {
+              "seed": 4,
+              "landCells": 14418,
+              "flaggedRate": 0.37779164932722986
+            },
+            {
+              "seed": 5,
+              "landCells": 14418,
+              "flaggedRate": 0.20044388958246637
+            },
+            {
+              "seed": 6,
+              "landCells": 14418,
+              "flaggedRate": 0.12650853100291304
+            },
+            {
+              "seed": 7,
+              "landCells": 14418,
+              "flaggedRate": 0.1760299625468165
+            },
+            {
+              "seed": 8,
+              "landCells": 14418,
+              "flaggedRate": 0.09287002358163407
+            },
+            {
+              "seed": 9,
+              "landCells": 14418,
+              "flaggedRate": 0.19628242474684424
+            },
+            {
+              "seed": 10,
+              "landCells": 14419,
+              "flaggedRate": 0.2983563353908038
+            },
+            {
+              "seed": 11,
+              "landCells": 14418,
+              "flaggedRate": 0.1809543626023027
+            },
+            {
+              "seed": 12,
+              "landCells": 14418,
+              "flaggedRate": 0.1788736301844916
+            },
+            {
+              "seed": 13,
+              "landCells": 14418,
+              "flaggedRate": 0.2124427798585102
+            },
+            {
+              "seed": 14,
+              "landCells": 14418,
+              "flaggedRate": 0.41933693993619087
+            },
+            {
+              "seed": 15,
+              "landCells": 14418,
+              "flaggedRate": 0.23720349563046192
+            },
+            {
+              "seed": 16,
+              "landCells": 14418,
+              "flaggedRate": 0.2200027743098904
+            },
+            {
+              "seed": 17,
+              "landCells": 14418,
+              "flaggedRate": 0.2034956304619226
+            },
+            {
+              "seed": 18,
+              "landCells": 14418,
+              "flaggedRate": 0.34533222360937715
+            },
+            {
+              "seed": 19,
+              "landCells": 14418,
+              "flaggedRate": 0.358648911083368
+            },
+            {
+              "seed": 20,
+              "landCells": 14418,
+              "flaggedRate": 0.4957691774171175
+            }
+          ],
+          "predictedClassShare": [
+            0,
+            0.27088267830948015,
+            0.6137307056085948,
+            0.000547924303217148,
+            0.03996726325682044,
+            0.0748714285218875,
+            0
+          ]
+        }
+      ]
     }
   },
   "final": {
@@ -4354,7 +6023,7 @@
         ]
       ]
     },
-    "modelJsonBytes": 2496
+    "modelJsonBytes": 2523
   },
-  "runtimeSeconds": 223.42520369
+  "runtimeSeconds": 244.839534827
 }

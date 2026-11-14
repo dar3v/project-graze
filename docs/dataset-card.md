@@ -117,3 +117,24 @@ and `devDuplicates`.
   derived from USGS and USFS GIS layers whose exact processing we do not
   know. The app recomputes them from synthetic heightmaps
   (`docs/notes.md` section 5).
+
+## How predictions are shown
+
+*(Agent draft, 2026-11-15; needs human review.)*
+
+The app never shows Covertype rows. It shows a model trained on them,
+applied to terrain that is generated, not measured.
+
+- **Walk-mode vegetation and the cover overlay are a visualization of
+  predicted classes on generated terrain.** Each cell's trees and tint come
+  from the class the model predicts for that cell's computed inputs.
+- **Generated terrain is not real terrain.** It is seeded noise scaled into
+  Covertype's elevation range. Its slope, aspect, hillshade and water
+  distances are computed by `@graze/features`, not taken from the USGS and
+  USFS layers behind this dataset (see "Known limits").
+- **The OOD flag marks low-trust cells**: cells whose inputs are outside the
+  training ranges, or far from the training data's centre. They are drawn
+  sparse and desaturated in walk mode. On the Sandbox page's default
+  settings, the share of land cells flagged is measured in
+  `model_card.json` `ood.generatedTerrain` and summarized in
+  `docs/model-card.md`.

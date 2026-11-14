@@ -13,7 +13,9 @@
     "ml:fetch": "node --experimental-strip-types ml/src/fetch.ts",
     "ml:explore": "node --experimental-strip-types ml/src/explore.ts",
     "ml:train": "node --experimental-strip-types ml/src/fetch.ts && node --experimental-strip-types ml/src/explore.ts && node --experimental-strip-types ml/src/train.ts",
-    "ml:evaluate-final": "node --experimental-strip-types ml/src/evaluate-final.ts"
+    "ml:evaluate-final": "node --experimental-strip-types ml/src/evaluate-final.ts",
+    "ml:generated-ood": "node --experimental-strip-types ml/src/generated-ood.ts",
+    "ml:bench": "node --experimental-strip-types ml/src/bench.ts"
   },
   "dependencies": {
     "hono": "5.0.0-rc.1",

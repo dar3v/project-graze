@@ -73,6 +73,12 @@ export const CLASS_NAMES = [
 ] as const
 export const N_CLASSES = CLASS_NAMES.length
 
+/**
+ * Short HUD labels, same order as CLASS_NAMES (D10, optional). Colors are not
+ * here: they live in the app's palette, keyed by class index.
+ */
+export const CLASS_DISPLAY_LABELS = ['Spruce-fir', 'Lodgepole', 'Ponderosa', 'Cottonwood', 'Aspen', 'Douglas-fir', 'Krummholz'] as const satisfies readonly string[] & { length: typeof N_CLASSES }
+
 /** Wilderness area names in area-index order (Wilderness_Area1..4 -> 0..3). */
 export const AREA_NAMES = ['Rawah', 'Neota', 'Comanche Peak', 'Cache la Poudre'] as const
 export const N_AREAS = AREA_NAMES.length

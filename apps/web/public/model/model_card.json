@@ -1,5 +1,6 @@
 {
   "schemaVersion": 1,
+  "modelVersion": "0.1.0-dev",
   "model": {
     "name": "Project Graze habitat classifier",
     "type": "softmax",
@@ -27,6 +28,16 @@
     "Douglas-fir",
     "Krummholz"
   ],
+  "classDisplayLabels": [
+    "Spruce-fir",
+    "Lodgepole",
+    "Ponderosa",
+    "Cottonwood",
+    "Aspen",
+    "Douglas-fir",
+    "Krummholz"
+  ],
+  "classOrderNote": "Class indices are a stable contract: the cover map, vegetation meshes and tints are keyed by index. Reordering or renaming a class requires telling Roles 1 and 2 first and bumping modelVersion.",
   "features": [
     "elevation",
     "slope",
@@ -1968,7 +1979,210 @@
       "Comanche Peak": 0.017629315258279772,
       "Cache la Poudre": 0.15161270911060296
     },
-    "generatedTerrainFlaggedRate": 0.23704140370344684
+    "generatedTerrainFlaggedRate": 0.12235357763359123,
+    "generatedTerrain": {
+      "generator": "packages/sim/terrain generateTerrain (Role 1), inputs from @graze/features heightmapToInputs, predicted by the app engine; water cells excluded",
+      "seeds": "1-20",
+      "flagDefinition": "flaggedRate = cells the app marks low trust (OOD detector over threshold OR any input outside its training range). detectorFlaggedRate and outsideTrainingRangeRate split it and sum to flaggedRate.",
+      "worlds": [
+        {
+          "name": "sandbox-page-defaults",
+          "description": "Sandbox page on load: relief 0.2, band center 0.4, 12% water, roughness 0.5, valley 0.35",
+          "options": {
+            "relief": 0.2,
+            "center": 0.4,
+            "waterLevel": 0.12
+          },
+          "landCells": 288361,
+          "flaggedRate": 0.12235357763359123,
+          "detectorFlaggedRate": 0.01357673194364009,
+          "outsideTrainingRangeRate": 0.10877684568995113,
+          "perSeedFlaggedRate": {
+            "min": 0.010056873352753503,
+            "median": 0.09120543764738522,
+            "max": 0.37938687751421835
+          }
+        },
+        {
+          "name": "generator-defaults",
+          "description": "generateTerrain defaults: relief 0.2, center 0.5, 12% water, roughness 0.5, valley 0.35",
+          "options": {},
+          "landCells": 288361,
+          "flaggedRate": 0.12101497775357971,
+          "detectorFlaggedRate": 0.012238132063628577,
+          "outsideTrainingRangeRate": 0.10877684568995113,
+          "perSeedFlaggedRate": {
+            "min": 0.010056873352753503,
+            "median": 0.09040782355389096,
+            "max": 0.37799972256901093
+          }
+        },
+        {
+          "name": "center-0.1",
+          "description": "Sandbox defaults with band center 0.1",
+          "options": {
+            "relief": 0.2,
+            "center": 0.1,
+            "waterLevel": 0.12
+          },
+          "landCells": 288361,
+          "flaggedRate": 0.16817808233429624,
+          "detectorFlaggedRate": 0.05940123664434511,
+          "outsideTrainingRangeRate": 0.10877684568995113,
+          "perSeedFlaggedRate": {
+            "min": 0.01768622555139409,
+            "median": 0.12425440421695104,
+            "max": 0.431197114717714
+          }
+        },
+        {
+          "name": "center-0.25",
+          "description": "Sandbox defaults with band center 0.25",
+          "options": {
+            "relief": 0.2,
+            "center": 0.25,
+            "waterLevel": 0.12
+          },
+          "landCells": 288361,
+          "flaggedRate": 0.13295834041357882,
+          "detectorFlaggedRate": 0.024181494723627676,
+          "outsideTrainingRangeRate": 0.10877684568995113,
+          "perSeedFlaggedRate": {
+            "min": 0.01158274379248162,
+            "median": 0.09696213066999584,
+            "max": 0.3918019142738244
+          }
+        },
+        {
+          "name": "center-0.55",
+          "description": "Sandbox defaults with band center 0.55",
+          "options": {
+            "relief": 0.2,
+            "center": 0.55,
+            "waterLevel": 0.12
+          },
+          "landCells": 288361,
+          "flaggedRate": 0.12153515905410232,
+          "detectorFlaggedRate": 0.012758313364151185,
+          "outsideTrainingRangeRate": 0.10877684568995113,
+          "perSeedFlaggedRate": {
+            "min": 0.009987515605493134,
+            "median": 0.09082397003745318,
+            "max": 0.37869330004161467
+          }
+        },
+        {
+          "name": "center-0.7",
+          "description": "Sandbox defaults with band center 0.7",
+          "options": {
+            "relief": 0.2,
+            "center": 0.7,
+            "waterLevel": 0.12
+          },
+          "landCells": 288361,
+          "flaggedRate": 0.12851252423177892,
+          "detectorFlaggedRate": 0.019735678541827777,
+          "outsideTrainingRangeRate": 0.10877684568995113,
+          "perSeedFlaggedRate": {
+            "min": 0.011027881814398668,
+            "median": 0.09418782077958107,
+            "max": 0.3866694409765571
+          }
+        },
+        {
+          "name": "center-0.85",
+          "description": "Sandbox defaults with band center 0.85",
+          "options": {
+            "relief": 0.2,
+            "center": 0.85,
+            "waterLevel": 0.12
+          },
+          "landCells": 288361,
+          "flaggedRate": 0.14943074826346142,
+          "detectorFlaggedRate": 0.04065390257351029,
+          "outsideTrainingRangeRate": 0.10877684568995113,
+          "perSeedFlaggedRate": {
+            "min": 0.016090997364405606,
+            "median": 0.1100360660285754,
+            "max": 0.40595089471493967
+          }
+        },
+        {
+          "name": "roughness-0",
+          "description": "Sandbox defaults with roughness 0",
+          "options": {
+            "relief": 0.2,
+            "center": 0.4,
+            "waterLevel": 0.12,
+            "roughness": 0
+          },
+          "landCells": 288361,
+          "flaggedRate": 0.16164113732439547,
+          "detectorFlaggedRate": 0.015893272668634106,
+          "outsideTrainingRangeRate": 0.14574786465576137,
+          "perSeedFlaggedRate": {
+            "min": 0.025038146760993203,
+            "median": 0.13580246913580246,
+            "max": 0.4102919758651779
+          }
+        },
+        {
+          "name": "roughness-1",
+          "description": "Sandbox defaults with roughness 1",
+          "options": {
+            "relief": 0.2,
+            "center": 0.4,
+            "waterLevel": 0.12,
+            "roughness": 1
+          },
+          "landCells": 288360,
+          "flaggedRate": 0.10482383132195866,
+          "detectorFlaggedRate": 0.049927174365376616,
+          "outsideTrainingRangeRate": 0.05489665695658205,
+          "perSeedFlaggedRate": {
+            "min": 0.04702455264253017,
+            "median": 0.08260507698709946,
+            "max": 0.28277153558052437
+          }
+        },
+        {
+          "name": "relief-0.1",
+          "description": "Sandbox defaults with relief 0.1",
+          "options": {
+            "relief": 0.1,
+            "center": 0.4,
+            "waterLevel": 0.12
+          },
+          "landCells": 288361,
+          "flaggedRate": 0.10038111949951622,
+          "detectorFlaggedRate": 0.000006935750673634784,
+          "outsideTrainingRangeRate": 0.10037418374884259,
+          "perSeedFlaggedRate": {
+            "min": 0.00006935774726036899,
+            "median": 0.07948397836038285,
+            "max": 0.363157164655292
+          }
+        },
+        {
+          "name": "relief-0.3",
+          "description": "Sandbox defaults with relief 0.3",
+          "options": {
+            "relief": 0.3,
+            "center": 0.4,
+            "waterLevel": 0.12
+          },
+          "landCells": 288361,
+          "flaggedRate": 0.255977750111839,
+          "detectorFlaggedRate": 0.14219676031086034,
+          "outsideTrainingRangeRate": 0.11378098980097863,
+          "perSeedFlaggedRate": {
+            "min": 0.09287002358163407,
+            "median": 0.21636149257872103,
+            "max": 0.4957691774171175
+          }
+        }
+      ]
+    }
   },
   "finalModelHoldout": {
     "accuracy": 0.6830617812794819,
@@ -1983,13 +2197,21 @@
       "results": [
         {
           "column": "hillshade9am",
-          "ourSun": {
+          "astronomicalSun": {
             "azimuth": 100.4934827800006,
             "altitude": 48.716227901461004
           },
-          "ours": {
+          "astronomical": {
             "mae": 22.81547393664016,
             "meanDifference": -22.71277714670369
+          },
+          "sharedSun": {
+            "azimuth": 114,
+            "altitude": 58.75
+          },
+          "shared": {
+            "mae": 0.423114140266734,
+            "meanDifference": -0.023602170894863057
           },
           "bestFitSun": {
             "azimuth": 114,
@@ -1999,13 +2221,21 @@
         },
         {
           "column": "hillshadeNoon",
-          "ourSun": {
+          "astronomicalSun": {
             "azimuth": 180,
             "altitude": 72.84
           },
-          "ours": {
+          "astronomical": {
             "mae": 11.047141234380916,
             "meanDifference": 7.9235769279313395
+          },
+          "sharedSun": {
+            "azimuth": 218,
+            "altitude": 68.75
+          },
+          "shared": {
+            "mae": 0.4428036518153898,
+            "meanDifference": 0.060162396398670534
           },
           "bestFitSun": {
             "azimuth": 218,
@@ -2015,13 +2245,21 @@
         },
         {
           "column": "hillshade3pm",
-          "ourSun": {
+          "astronomicalSun": {
             "azimuth": 259.5065172199994,
             "altitude": 48.716227901461004
           },
-          "ours": {
+          "astronomical": {
             "mae": 34.13235727207707,
             "meanDifference": 34.12608860280197
+          },
+          "sharedSun": {
+            "azimuth": 269,
+            "altitude": 37.75
+          },
+          "shared": {
+            "mae": 0.7530186377214019,
+            "meanDifference": -0.2910303336278346
           },
           "bestFitSun": {
             "azimuth": 269,
@@ -2040,11 +2278,13 @@
     "Leave-one-area-out results vary a lot between areas; a held-out area can contain classes or elevations the training areas barely have.",
     "Generated terrain is synthetic; hillshade and water distances are computed differently from the GIS layers behind the dataset.",
     "The OOD flag is a distance from the training centre; it cannot catch inputs that look typical feature-by-feature but never occur together in real landscapes.",
+    "Walk-mode vegetation and overlays draw the predicted class of each cell of generated terrain. The terrain is not a real place, a good-looking world is not evidence that the model is accurate, and low-trust (OOD) cells are drawn differently because their predictions are guesses.",
     "Educational simulation only, not a forest-management or ecological decision tool."
   ],
   "versions": {
     "node": "v24.18.0",
     "pipeline": "ml/src (no ML libraries)",
-    "modelJsonBytes": 2496
+    "modelJsonBytes": 2523,
+    "modelJsonSha256": "277b35d1869457a59f9233f9c72db78ec7d559ac082497e29fc5534d11df373b"
   }
 }

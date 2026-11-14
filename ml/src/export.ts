@@ -6,6 +6,7 @@ import { FEATURE_NAMES } from '../../packages/features/src/index.ts'
 import { forestFromTrees, type ForestModel, type Tree } from './models/forest.ts'
 import type { NetworkModel } from './models/network.ts'
 import type { StandardizedDetector } from './ood.ts'
+import { MODEL_VERSION, SCHEMA_VERSION } from './config.ts'
 
 /** Leaf probabilities are rounded to this many decimals to keep model.json small. */
 export const LEAF_DECIMALS = 4
@@ -43,7 +44,9 @@ function matrixRows(w: Float64Array, rows: number, cols: number): number[][] {
 }
 
 export interface ModelJsonExport {
-  schemaVersion: 1
+  schemaVersion: typeof SCHEMA_VERSION
+  /** Same value as model_card.json `modelVersion`; a saved world stores it (D11). */
+  modelVersion: string
   featureNames: string[]
   classCount: number
   scaler?: { mean: number[]; std: number[] }
@@ -88,7 +91,8 @@ export function exportModelJson(
     }
   }
   return {
-    schemaVersion: 1,
+    schemaVersion: SCHEMA_VERSION,
+    modelVersion: MODEL_VERSION,
     featureNames: [...FEATURE_NAMES],
     classCount: k,
     ...(scaler ? { scaler } : {}),
