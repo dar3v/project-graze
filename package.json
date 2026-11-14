@@ -9,7 +9,8 @@
     "test": "node --experimental-strip-types --test packages/features/test/*.test.ts"
   },
   "dependencies": {
-    "hono": "5.0.0-rc.1"
+    "hono": "5.0.0-rc.1",
+    "three": "^0.187.0"
   },
   "devDependencies": {
     "@cloudflare/vite-plugin": "beta",

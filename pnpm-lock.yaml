@@ -11,6 +11,9 @@ importers:
       hono:
         specifier: 5.0.0-rc.1
         version: 5.0.0-rc.1
+      three:
+        specifier: ^0.187.0
+        version: 0.187.0
     devDependencies:
       '@cloudflare/vite-plugin':
         specifier: beta
@@ -929,6 +932,9 @@ packages:
     resolution: {integrity: sha512-SS+jx45GF1QjgEXQx4NJZV9ImqmO2NPz5FNsIHrsDjh2YsHnawpan7SNQ1o8NuhrbHZy9AZhIoCUiCeaW/C80g==}
     engines: {node: '>=18'}
 
+  three@0.187.0:
+    resolution: {integrity: sha512-Qiu7R+Cmh8CstZsY1uJOSWnVlfo7ZtNLV7mF8Jltk3LB3AtDu9cRZlcnRKkAk8Y4z6KKw35z7Y7Urd7jWY8etA==}
+
   tinyglobby@0.2.17:
     resolution: {integrity: sha512-wXR/dYpcqKmfWpEdZjiKJOwCNFndD0DMnrW/cYjVGttEkBfVgcLFHoNrlj47mjOVic9yyNu65alsgF4NQyTa2g==}
     engines: {node: '>=12.0.0'}
@@ -1690,6 +1696,8 @@ snapshots:
   source-map-js@1.2.2: {}
 
   supports-color@10.2.2: {}
+
+  three@0.187.0: {}
 
   tinyglobby@0.2.17:
     dependencies:
