@@ -20,13 +20,13 @@ function post(msg: FromWorker, transfer: Transferable[] = []): void {
 self.onmessage = async (event: MessageEvent<ToWorker>) => {
   const msg = event.data
   if (msg.type === 'init') {
-    const outcome = await loadEngine(fetchJsonOrThrow, msg.baseUrl, msg.allowStub)
+    const outcome = await loadEngine(fetchJsonOrThrow, msg.baseUrl)
     if (!outcome.ok) {
       post({ type: 'fatal', message: outcome.message })
       return
     }
     engine = outcome.engine
-    post({ type: 'ready', card: engine.card, stub: engine.stub, loadError: outcome.loadError, warnings: outcome.warnings })
+    post({ type: 'ready', card: engine.card, warnings: outcome.warnings })
     return
   }
 

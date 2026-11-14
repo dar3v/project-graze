@@ -3,7 +3,6 @@ import { test } from 'node:test'
 
 import { parseModelCard, type ModelCard } from '../src/lib/model/modelCard.ts'
 import { emptyForm, parseField, sampleToForm, validateForm, type FormValues } from '../src/lib/model/validation.ts'
-import { STUB_CARD } from '../src/lib/model/stub.ts'
 import { rawCard, SAMPLE } from './fixtures.ts'
 
 function card(): ModelCard {
@@ -57,10 +56,4 @@ test('ranges come from the card, not from code', () => {
   const wide = parseModelCard(raw)
   assert.ok(wide.ok)
   if (wide.ok) assert.equal(validateForm({ ...valid(), elevation: '4000' }, wide.card).warnings.elevation, undefined)
-})
-
-test('the stub card is usable by the validator and labeled as a stub', () => {
-  assert.equal(STUB_CARD.stub, true)
-  assert.ok(STUB_CARD.classes.every((c) => c.startsWith('Stub class')))
-  assert.ok(validateForm(valid(), STUB_CARD).sample)
 })

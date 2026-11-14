@@ -5,14 +5,14 @@
 
 import { writable, type Readable } from 'svelte/store'
 import type { TerrainSample } from '../deps/features.ts'
-import { ALLOW_STUB_MODEL, MODEL_BASE_PATH } from './config.ts'
+import { MODEL_BASE_PATH } from './config.ts'
 import type { BatchResult, Explanation, Prediction } from './engine.ts'
 import type { ModelCard } from './modelCard.ts'
 import type { FromWorker, ToWorker } from './protocol.ts'
 
 export type ModelStatus =
   | { readonly state: 'loading' }
-  | { readonly state: 'ready'; readonly card: ModelCard; readonly stub: boolean; readonly loadError?: string; readonly warnings: readonly string[] }
+  | { readonly state: 'ready'; readonly card: ModelCard; readonly warnings: readonly string[] }
   | { readonly state: 'error'; readonly message: string }
 
 const status = writable<ModelStatus>({ state: 'loading' })
@@ -43,7 +43,7 @@ export function startModel(): void {
     const msg = e.data
     switch (msg.type) {
       case 'ready':
-        status.set({ state: 'ready', card: msg.card, stub: msg.stub, loadError: msg.loadError, warnings: msg.warnings })
+        status.set({ state: 'ready', card: msg.card, warnings: msg.warnings })
         return
       case 'fatal':
         status.set({ state: 'error', message: msg.message })
@@ -70,7 +70,7 @@ export function startModel(): void {
     status.set({ state: 'error', message })
     failAll(message)
   }
-  send({ type: 'init', baseUrl: baseUrl(), allowStub: ALLOW_STUB_MODEL })
+  send({ type: 'init', baseUrl: baseUrl() })
 }
 
 function send(msg: ToWorker, transfer: Transferable[] = []): void {

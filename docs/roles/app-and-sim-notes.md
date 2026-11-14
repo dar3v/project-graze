@@ -141,9 +141,9 @@ Dragging a slider fires many changes per second. Predicting only after
 are discarded (a sequence number check in `Sandbox.svelte`).
 
 **"What if the model files fail to load?"**
-Right now the app falls back to a labeled STUB with a banner. From Day 12
-(`ALLOW_STUB_MODEL = false`) it shows a visible error, and the sandbox
-explains that predictions are unavailable. Nothing crashes either way. This
+The app shows a visible error, and the sandbox explains that predictions are
+unavailable. The labeled stub was removed once the real model shipped.
+Nothing crashes. This
 is tested in `apps/web/test/model.test.ts`.
 
 **"What if someone trains with features in a different order?"**
@@ -183,15 +183,23 @@ this on every page.
 
 ## 5. Known gaps and risks
 
-- **Stub must go by Day 12.** Set `ALLOW_STUB_MODEL = false` in
-  `src/lib/model/config.ts` and delete `src/lib/model/stub.ts`.
-- **Placeholder terrain.** `sandbox/terrain.ts` and the 2D map stand in for
-  Role 1. The placeholder valley uses only the middle 30% of the elevation
-  range, because the full range over 3.8 km gives unrealistically steep
-  slopes. Role 1's real terrain decides this for real.
-- **Hillshade sun angles** (`SUN` in `terrain.ts`) are assumptions. The
-  dataset's hillshade method may differ; Role 3's ablation measures how much
-  that matters.
+- **Stub removed (Nov 14).** Missing or invalid model files are now a
+  visible error; there is no fallback predictor.
+- **Terrain inputs come from `@graze/features`.** The Sandbox uses Role 1's
+  generator and `WorldView`, but packs model inputs with
+  `heightmapToSamples` (`src/lib/sandbox/cellInputs.ts`), because that is
+  where Role 3's fitted `SUN` lives. Role 1's `computeCellInputs` and the old
+  placeholder still use the earlier assumed sun angles (9am hillshade ~35
+  points off on average on the default map). Once Role 1 switches to the
+  fitted `SUN`, either function is fine.
+- **Placeholder 2D map is unused** (`sandbox/MapView.svelte`,
+  `sandbox/terrain.ts`), but Role 1's `apps/web/test/world.test.ts` still
+  imports the placeholder, so delete both together with Role 1.
+- **Elevation slider.** Elevation drives the prediction most, so a fixed
+  band gives a near single-class map (99% Lodgepole Pine at the 50% center).
+  The Sandbox defaults to a 40% center (a Lodgepole/Ponderosa mix) and lets
+  the user move the band. Relief stays at 20%; 40% puts ~6,000 cells out of
+  distribution.
 - **`.svelte` files are not type-checked**, only compiled by the build.
   `pnpm typecheck` covers the `.ts` files and the tests.
 - **Deploy is not done.** It needs your Cloudflare account. The exact `cf`

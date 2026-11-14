@@ -68,10 +68,10 @@ Each item is done only when every checkbox is ticked.
 - [x] No server round trip for predictions
 - [x] Debounced batch prediction when the terrain changes
 - [x] Graceful failure if the model files fail to load (visible error, no crash)
-- [ ] A stub that returns clearly labeled fake predictions is acceptable until Role 3 exports the real model, but it must be removed before Day 12 *(stub in place and labeled; still needs removing before Day 12)*
+- [x] A stub that returns clearly labeled fake predictions is acceptable until Role 3 exports the real model, but it must be removed before Day 12 *(removed Nov 14 once Role 3's model shipped: missing or invalid model files now show a visible error)*
 
 ### D3. Site Probe (Days 3-7)
-- [ ] Panel opens when a cell is clicked (Role 1 emits the selection) *(works on the 2D placeholder map; waiting on Role 1's click hookup)*
+- [x] Panel opens when a cell is clicked (Role 1 emits the selection) *(Sandbox now uses Role 1's 3D `WorldView`; its Select tool calls `pick`)*
 - [x] Editable form with every model feature, prefilled from the cell
 - [x] Validation for missing, non-numeric, and out-of-range values, using ranges from `model_card.json` (nothing hard-coded)
 - [x] Output: predicted cover type, probability bars, one-sentence explanation
@@ -205,3 +205,12 @@ How it behaves:
 Decision for you: the background is display-only and doesn't respond to clicks, so the 2D placeholder map is still how you click cells on the Sandbox page. Do you want clicking to happen on the 3D background instead? If so, the Sandbox page would need to let clicks through to it, and the dimming would probably be lighter there. Otherwise the 2D map box gets replaced by a second, interactive view of the world.
 
 ---
+
+### Nov 14 (later): wiring after Roles 1 and 3 landed
+
+- Sandbox uses Role 1's 3D `WorldView`: brush, overlays (cover, confidence, OOD), click-to-probe and herds drawn in 3D. The 2D placeholder map is no longer on the page.
+- Stub removed (D2): `stub.ts`, `ALLOW_STUB_MODEL`, the banner and the `stub` flags are gone. Missing model files are a visible error.
+- Model inputs are computed with `@graze/features` `heightmapToSamples` so the hillshade uses Role 3's fitted `SUN`. Role 1's `computeCellInputs` still has the old sun angles, which was train/serve skew. **Needs Role 1:** switch `packages/sim/terrain` to the fitted `SUN`.
+- New "Elevation" slider (band center). Default 40%, because the 50% band predicts 99% Lodgepole Pine.
+- Checked: typecheck, 91 tests, build, and headless Firefox at 1280 px and 390 px (map renders, batch predicts, sim runs, probe opens, no horizontal scroll, no app errors).
+- Still open: sensitivity from Role 3's explain function (none exists yet), human-written limitations and Responsible Use text, Cloudflare Pages deploy, demo video.

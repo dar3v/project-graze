@@ -1,6 +1,6 @@
 <script lang="ts">
   // Every number on this page is read from model_card.json at runtime.
-  // Nothing is typed in by hand, and the stub model is never shown here.
+  // Nothing is typed in by hand. A card marked `stub: true` gets a warning banner.
   import { baseUrl } from '../model/client.ts'
   import { fetchJsonOrThrow, loadCard } from '../model/loader.ts'
   import type { ModelCard } from '../model/modelCard.ts'

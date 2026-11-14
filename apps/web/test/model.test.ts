@@ -101,7 +101,6 @@ test('predictOne returns the shared output shape with OOD reasons', () => {
   assert.equal(p.probs.length, 3)
   assert.equal(p.classIndex, 0) // high elevation favors class 0 in the fixture
   assert.equal(p.ood, false)
-  assert.equal(p.stub, false)
 
   const far = engine.predictOne({ ...SAMPLE, elevation: 4200 })
   assert.equal(far.ood, true)
@@ -147,34 +146,24 @@ test('explainOne returns a sentence and a sensitivity per input', () => {
   assert.ok(!e.sentence.includes('\n'))
 })
 
-test('loader: missing files fall back to the labeled stub only when allowed', async () => {
+test('loader: missing files are a visible error (no fallback predictor)', async () => {
   const missing: FetchJson = async (url) => {
     throw new Error(`${url} returned HTTP 404.`)
   }
-  const withStub = await loadEngine(missing, '/model/', true)
-  assert.ok(withStub.ok)
-  if (withStub.ok) {
-    assert.equal(withStub.engine.stub, true)
-    assert.match(withStub.loadError ?? '', /404/)
-    assert.equal(withStub.engine.predictOne(SAMPLE).stub, true)
-  }
-  const noStub = await loadEngine(missing, '/model/', false)
-  assert.equal(noStub.ok, false)
-  if (!noStub.ok) assert.match(noStub.message, /404/)
+  const out = await loadEngine(missing, '/model/')
+  assert.equal(out.ok, false)
+  if (!out.ok) assert.match(out.message, /404/)
 })
 
 test('loader: invalid model.json is a visible error, valid files load the real model', async () => {
   const files: Record<string, unknown> = { '/model/model_card.json': rawCard(), '/model/model.json': { nope: true } }
   const fetchJson: FetchJson = async (url) => files[url]
-  const bad = await loadEngine(fetchJson, '/model/', false)
+  const bad = await loadEngine(fetchJson, '/model/')
   assert.equal(bad.ok, false)
   if (!bad.ok) assert.match(bad.message, /model.json is invalid/)
 
   files['/model/model.json'] = rawSoftmaxModel()
-  const good = await loadEngine(fetchJson, '/model/', true)
+  const good = await loadEngine(fetchJson, '/model/')
   assert.ok(good.ok)
-  if (good.ok) {
-    assert.equal(good.engine.stub, false)
-    assert.equal(good.loadError, undefined)
-  }
+  if (good.ok) assert.deepEqual(good.engine.card.classes, card().classes)
 })

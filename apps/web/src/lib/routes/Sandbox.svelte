@@ -4,20 +4,34 @@
   import { sampleFromBuffer } from '../model/inputs.ts'
   import { inputSpec } from '../model/modelCard.ts'
   import SiteProbe from '../probe/SiteProbe.svelte'
-  import MapView from '../sandbox/MapView.svelte'
+  import { packCellInputs } from '../sandbox/cellInputs.ts'
+  import type { PackedCellInputs } from '../sandbox/cellInputs.ts'
   import { classColor } from '../sandbox/palette.ts'
   import { selectCell, selectedCell } from '../sandbox/selection.ts'
-  import { CELL_SIZE_M, computeCellInputs, generateHeightmap, GRID, quantile, scaleHeightmap } from '../sandbox/terrain.ts'
   import SimPanel from '../sim/SimPanel.svelte'
+  import { CELL_SIZE_M, generateTerrain, GRID, reliefBand, waterLevelForShare } from '../world/terrain.ts'
+  import WorldView from '../world/WorldView.svelte'
 
   const DEBOUNCE_MS = 250
+  /** Relief as a share of the elevation range (Role 1's default). */
+  const RELIEF = 0.2
 
   let terrainSeed = $state(7)
   let waterShare = $state(12)
-  let showOod = $state(false)
+  /**
+   * Where the terrain's elevation band sits in the model's training range, in
+   * percent (Role 1's `center`). Elevation drives the prediction most, so a
+   * fixed mid-range band (50%) gives an almost single-class map; 40% opens on
+   * a Lodgepole/Ponderosa mix. Relief stays at Role 1's 20% default: wider
+   * bands push most cells out of the training range.
+   */
+  let bandCenter = $state(40)
   let probeOpen = $state(false)
+  /** Bumped by "Reset terrain" to regenerate the same seed (drops brush edits). */
+  let terrainVersion = $state(0)
 
   let cover: Uint8Array | null = $state.raw(null)
+  let confidence: Float32Array | null = $state.raw(null)
   let ood: Uint8Array | null = $state.raw(null)
   let batchInfo: { oodCount: number; invalidCount: number } | null = $state(null)
   let mapVersion = $state(0)
@@ -28,18 +42,41 @@
   const card = $derived($modelStatus.state === 'ready' ? $modelStatus.card : null)
   const elevation = $derived(card ? inputSpec(card, 'elevation') : null)
 
-  const height01 = $derived(generateHeightmap(Number(terrainSeed) || 0, GRID))
-  // Placeholder relief: use the middle RELIEF_SHARE of the training elevation
-  // range. The full range over a 3.8 km map gives unrealistically steep slopes.
-  const RELIEF_SHARE = 0.3
-  const heightM = $derived.by(() => {
-    if (!elevation) return null
-    const mid = (elevation.min + elevation.max) / 2
-    const half = ((elevation.max - elevation.min) * RELIEF_SHARE) / 2
-    return scaleHeightmap(height01, mid - half, mid + half)
+  // The heightmap is mutable: WorldView's brush edits it IN PLACE and then
+  // calls onheightmapchange. It is replaced (new identity) only when the seed,
+  // the band center, the model's elevation range or terrainVersion changes. Relief and the
+  // elevation band come from Role 1's generator defaults (20% of the range).
+  let heightM: Float32Array | null = $state.raw(null)
+  $effect(() => {
+    void terrainVersion
+    if (!elevation) return
+    heightM = generateTerrain({
+      seed: Number(terrainSeed) || 0,
+      center: bandCenter / 100,
+      relief: RELIEF,
+      elevation: { min: elevation.min, max: elevation.max },
+    }).heightmap
   })
-  const waterLevel = $derived(heightM ? quantile(heightM, waterShare / 100) : 0)
-  const cells = $derived(heightM ? computeCellInputs(heightM, GRID, CELL_SIZE_M, waterLevel) : null)
+
+  // Water level in meters for the chosen share of cells. Recomputed when the
+  // slider or the terrain identity changes, not on every brush stroke, so
+  // sculpting below the water line floods instead of moving the water.
+  const band = $derived(elevation ? reliefBand(elevation, RELIEF, bandCenter / 100) : null)
+
+  const waterLevel = $derived(heightM ? waterLevelForShare(heightM, waterShare / 100) : 0)
+
+  let cells: PackedCellInputs | null = $state.raw(null)
+  $effect(() => {
+    if (heightM) cells = packCellInputs(heightM, GRID, CELL_SIZE_M, waterLevel)
+  })
+
+  function onHeightmapChange(): void {
+    // Water distance is global, so the whole grid is recomputed (~16k cells).
+    if (heightM) cells = packCellInputs(heightM, GRID, CELL_SIZE_M, waterLevel)
+    // Refresh an open probe so it shows the sculpted cell, not stale values.
+    const sel = $selectedCell
+    if (probeOpen && sel && cells) pick(sel.x, sel.y)
+  }
 
   let timer: ReturnType<typeof setTimeout> | undefined
   let seq = 0
@@ -60,6 +97,7 @@
       const r = await predictBatch(inputs.slice()) // copy: the buffer is transferred
       if (mine !== seq) return
       cover = r.classIndex
+      confidence = r.confidence
       ood = r.ood
       batchInfo = { oodCount: r.oodCount, invalidCount: r.invalidCount }
       mapVersion++
@@ -85,7 +123,7 @@
   }
 
   const counts = $derived.by(() => {
-    if (!cover || !cells || !card) return null
+    if (!cover || !cells || !card || cover.length !== cells.water.length) return null
     const out = new Array<number>(card.classes.length).fill(0)
     let land = 0
     for (let i = 0; i < cover.length; i++) {
@@ -107,23 +145,28 @@
       <strong>No predictions without a model.</strong> The sandbox needs <code>model.json</code> and <code>model_card.json</code>.
       You can still read the <a href="#/responsible-use">Responsible Use</a> page.
     </div>
-  {:else if card && cells}
-    <p class="notice placeholder">
-      <strong>Placeholder map.</strong> A flat 2D view of a generated valley, standing in for the 3D world. Click a cell to probe it.
+  {:else if card && cells && heightM && elevation}
+    <p class="hint muted">
+      Select a cell to probe it. Raise, lower or flatten the ground and the cover map is predicted again in your browser. Right-drag to orbit, scroll to zoom.
     </p>
 
     <div class="map">
-      <MapView
+      <WorldView
+        heightmap={heightM}
         size={GRID}
-        {height01}
-        water={cells.water}
+        cellSizeM={CELL_SIZE_M}
+        waterLevelM={waterLevel}
+        elevation={{ min: elevation.min, max: elevation.max }}
+        classes={card.classes}
         {cover}
+        {confidence}
         {ood}
-        {showOod}
         selected={probeOpen ? $selectedCell : null}
         herbivores={positions?.herbivores ?? null}
         predators={positions?.predators ?? null}
+        busy={predicting ? 'Predicting…' : null}
         onpick={pick}
+        onheightmapchange={onHeightmapChange}
       />
     </div>
 
@@ -140,14 +183,14 @@
     </p>
 
     {#if counts}
-      <ul class="legend" aria-label="Legend: predicted cover types">
+      <ul class="legend" aria-label="Share of land per predicted cover type">
+        <li class="label">Share of land</li>
         {#each card.classes as name, i (i)}
           <li>
             <span class="sw" style:background={classColor(i)}></span>{name}
             <span class="pct">{counts.land ? Math.round((counts.out[i] / counts.land) * 100) : 0}%</span>
           </li>
         {/each}
-        <li><span class="sw water"></span>Water</li>
       </ul>
     {/if}
 
@@ -157,13 +200,14 @@
         <input type="number" step="1" bind:value={terrainSeed} />
       </label>
       <label>
+        <span class="label">Elevation · {band ? `${Math.round(band.min)}–${Math.round(band.max)} m` : ''}</span>
+        <input type="range" min="0" max="100" step="5" bind:value={bandCenter} />
+      </label>
+      <label>
         <span class="label">Water level · {waterShare}% of cells</span>
         <input type="range" min="0" max="40" step="1" bind:value={waterShare} />
       </label>
-      <label class="check">
-        <input type="checkbox" bind:checked={showOod} />
-        <span>Mark cells outside the training range</span>
-      </label>
+      <button type="button" onclick={() => terrainVersion++}>Reset terrain</button>
       <button type="button" onclick={manualProbe}>Enter values manually</button>
     </div>
 
@@ -180,8 +224,10 @@
     text-align: center;
   }
 
-  .placeholder {
-    margin-bottom: 20px;
+  .hint {
+    text-align: center;
+    font-size: 11px;
+    margin: 0 0 14px;
   }
 
   .map {
@@ -218,11 +264,6 @@
     margin-right: 6px;
   }
 
-  .sw.water {
-    background: rgb(16, 27, 34);
-    outline: 1px solid var(--border);
-  }
-
   .pct {
     color: var(--text-3);
     margin-left: 4px;
@@ -239,18 +280,6 @@
   .controls label {
     display: grid;
     gap: 6px;
-  }
-
-  .check {
-    display: flex !important;
-    align-items: center;
-    gap: 8px;
-    font-size: 12px;
-    color: var(--text-2);
-  }
-
-  .check input {
-    width: auto;
   }
 
   code {

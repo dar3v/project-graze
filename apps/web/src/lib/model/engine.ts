@@ -11,7 +11,6 @@ import type { ModelCard } from './modelCard.ts'
 import { formatNumber } from './validation.ts'
 
 export interface Predictor {
-  readonly stub: boolean
   probs(features: readonly number[]): number[]
   /** Larger = more unusual. null when the model ships no detector. */
   oodScore(features: readonly number[]): number | null
@@ -25,7 +24,6 @@ export interface Prediction {
   readonly ood: boolean
   readonly oodReasons: string[]
   readonly outOfRange: RawInputKey[]
-  readonly stub: boolean
 }
 
 export interface BatchResult {
@@ -56,7 +54,6 @@ export interface Explanation {
 
 export function modelPredictor(m: ModelJson): Predictor {
   return {
-    stub: false,
     probs: (f) => predictProbs(m, f),
     oodScore: (f) => oodScore(m, f),
     oodThreshold: m.ood?.threshold,
@@ -68,7 +65,6 @@ export const SENSITIVITY_STEP_FRACTION = 0.1
 
 export interface Engine {
   readonly card: ModelCard
-  readonly stub: boolean
   predictOne(sample: TerrainSample): Prediction
   predictBatch(buf: Float32Array): BatchResult
   explainOne(sample: TerrainSample): Explanation
@@ -97,7 +93,7 @@ export function createEngine(card: ModelCard, predictor: Predictor): Engine {
     if (score !== null && predictor.oodThreshold !== undefined && score > predictor.oodThreshold) {
       reasons.push('This combination of inputs is unusual compared with the training data, even if each value is in range.')
     }
-    return { classIndex: argmax(probs), probs, ood: reasons.length > 0, oodReasons: reasons, outOfRange: oor, stub: predictor.stub }
+    return { classIndex: argmax(probs), probs, ood: reasons.length > 0, oodReasons: reasons, outOfRange: oor }
   }
 
   function predictBatch(buf: Float32Array): BatchResult {
@@ -167,7 +163,7 @@ export function createEngine(card: ModelCard, predictor: Predictor): Engine {
     }
   }
 
-  return { card, stub: predictor.stub, predictOne, predictBatch, explainOne }
+  return { card, predictOne, predictBatch, explainOne }
 }
 
 export function explainSentence(card: ModelCard, p: Prediction, sens: readonly Sensitivity[]): string {

@@ -41,7 +41,7 @@
       safeguards: [
         'The Model Report is generated from model_card.json, so the numbers shown are the numbers the pipeline produced.',
         'The herd simulation rules are labeled "assumptions, not model output" and shown in full next to the simulation.',
-        'Placeholder predictions are labeled STUB until the real model ships.',
+        'If the model files are missing or invalid, the app shows an error instead of guessing; there is no fallback predictor.',
         'Dataset source and license are credited on every page.',
       ],
     },

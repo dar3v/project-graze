@@ -134,7 +134,7 @@
   {#if explanation}
     {@const p = explanation.prediction}
     <div class="result" aria-live="polite">
-      <p class="label">Predicted cover type {#if p.stub}<span class="stub-tag">stub · fake</span>{/if}</p>
+      <p class="label">Predicted cover type</p>
       <p class="prediction">{card.classes[p.classIndex]}</p>
       <p class="sentence">{explanation.sentence}</p>
 

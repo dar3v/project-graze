@@ -13,11 +13,11 @@ Sculpt a procedurally generated valley, let a trained model predict what vegetat
 | --- | --- |
 | Repo and tooling | In progress |
 | Shared features contract (`@graze/features`) | In progress |
-| Terrain sandbox (noise terrain, water, camera) | In progress: generator, 3D view, brush, overlays and backdrop built; Sandbox page wiring pending |
+| Terrain sandbox (noise terrain, water, camera) | Built: 3D view wired into the Sandbox page (brush, overlays, picking, herds) |
 | Data pipeline (download, prepare, split) | Planned |
 | Model training and evaluation | Planned |
-| Site Probe form (input, validation, prediction) | Built; runs on a labeled stub until the model ships |
-| Model Report page | Built; reads `model_card.json` only (empty until exported) |
+| Site Probe form (input, validation, prediction) | Built; uses the exported model (stub removed) |
+| Model Report page | Built; reads `model_card.json` only |
 | Herd simulation | Built (herbivores, predators, rewilding score) |
 | App shell and Responsible Use page | Built (Responsible Use wording is a draft) |
 | Deployment | Planned |
@@ -96,9 +96,9 @@ pnpm web:build
 pnpm web:preview    # serves apps/web/dist on a local URL
 ```
 
-Everything, including predictions, runs in the browser. To use the trained
-model, put `model.json` and `model_card.json` in `apps/web/public/model/`
-before building. Until those exist, the app runs a clearly labeled stub.
+Everything, including predictions, runs in the browser. The app needs
+`model.json` and `model_card.json` in `apps/web/public/model/` (`pnpm ml:train`
+writes them); without them it shows an error instead of predictions.
 
 ### Deploy
 

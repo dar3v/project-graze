@@ -7,12 +7,11 @@ import { createEngine, modelPredictor, type Engine } from './engine.ts'
 import { parseModelJson } from './inference.ts'
 import { parseModelCard, type ModelCard } from './modelCard.ts'
 import { MODEL_CARD_JSON, MODEL_JSON } from './config.ts'
-import { STUB_CARD, STUB_PREDICTOR } from './stub.ts'
 
 export type FetchJson = (url: string) => Promise<unknown>
 
 export type LoadOutcome =
-  | { readonly ok: true; readonly engine: Engine; readonly warnings: readonly string[]; readonly loadError?: string }
+  | { readonly ok: true; readonly engine: Engine; readonly warnings: readonly string[] }
   | { readonly ok: false; readonly message: string }
 
 export class ModelLoadError extends Error {}
@@ -47,13 +46,12 @@ async function loadReal(fetchJson: FetchJson, baseUrl: string): Promise<{ engine
   return { engine: createEngine(card, modelPredictor(parsed.model)), warnings }
 }
 
-export async function loadEngine(fetchJson: FetchJson, baseUrl: string, allowStub: boolean): Promise<LoadOutcome> {
+/** Missing or invalid model files are a visible error; there is no fallback predictor. */
+export async function loadEngine(fetchJson: FetchJson, baseUrl: string): Promise<LoadOutcome> {
   try {
     const { engine, warnings } = await loadReal(fetchJson, baseUrl)
     return { ok: true, engine, warnings }
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err)
-    if (!allowStub) return { ok: false, message }
-    return { ok: true, engine: createEngine(STUB_CARD, STUB_PREDICTOR), warnings: [], loadError: message }
+    return { ok: false, message: err instanceof Error ? err.message : String(err) }
   }
 }

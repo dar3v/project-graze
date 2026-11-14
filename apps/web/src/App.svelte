@@ -12,9 +12,7 @@
       ? 'model: loading'
       : $modelStatus.state === 'error'
         ? 'model: error'
-        : $modelStatus.stub
-          ? 'model: stub'
-          : `model: ${$modelStatus.card.model.version}`,
+        : `model: ${$modelStatus.card.model.version}`,
   )
 </script>
 
@@ -38,12 +36,6 @@
   {#if $modelStatus.state === 'error'}
     <div class="notice error banner" role="alert">
       <strong>The model could not be loaded.</strong> Predictions are unavailable. {$modelStatus.message}
-    </div>
-  {:else if $modelStatus.state === 'ready' && $modelStatus.stub}
-    <div class="notice warn banner" role="status">
-      <span class="stub-tag">stub</span> <strong>Fake predictions.</strong> The real model files are not available yet, so a
-      placeholder predictor is running. Its class names and numbers are made up and mean nothing.
-      {#if $modelStatus.loadError}<span class="muted"> ({$modelStatus.loadError})</span>{/if}
     </div>
   {/if}
 
