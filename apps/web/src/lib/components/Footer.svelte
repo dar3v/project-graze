@@ -1,4 +1,9 @@
+<script lang="ts">
+  import { PREDICTION_NOTICE } from '../state/worldFeatures.ts'
+</script>
+
 <footer>
+  <p class="notice-line">{PREDICTION_NOTICE}</p>
   <p>
     <strong>Educational simulation only.</strong> Not for real forestry, conservation, or land-use decisions. The model learned
     from one forest region in Colorado. Its predictions do not transfer to other places, and on this generated terrain they are
@@ -28,6 +33,11 @@
   strong {
     color: var(--text);
     font-weight: 500;
+  }
+
+  .notice-line {
+    margin-bottom: 10px;
+    color: var(--text);
   }
 
   .credit {

@@ -127,7 +127,7 @@
 
     <h3>Evaluation</h3>
     {#if c.evaluations && c.evaluations.length > 0}
-      {#each c.evaluations as ev (ev.name)}
+      {#each c.evaluations as ev, k (`${ev.name}|${ev.split}|${k}`)}
         <div class="eval">
           <p class="hi">{ev.name}</p>
           <p class="muted small">Split: {ev.split} · accuracy {pct(ev.accuracy)} · <strong class="hi">macro-F1 {f3(ev.macroF1)}</strong></p>
@@ -248,6 +248,8 @@
         {#if c.ood.threshold !== undefined}Threshold {c.ood.threshold}.{/if}
         {#if c.ood.flaggedRate !== undefined}Flags {pct(c.ood.flaggedRate)} of held-out samples.{/if}
         In the app, a prediction is also flagged when any input is outside its training range.
+        {#if typeof c.ood.generatedTerrainFlaggedRate === 'number'}On generated Sandbox worlds (default settings, several seeds),
+          {pct(c.ood.generatedTerrainFlaggedRate)} of land cells are marked low trust.{/if}
       </p>
     {:else}
       {@render missing('ood')}

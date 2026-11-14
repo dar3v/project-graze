@@ -20,6 +20,7 @@
     "src",
     "cloudflare.config.ts",
     ".cloudflare/types",
-    "packages/features/src"
+    "packages/features/src",
+    "packages/worlds/src"
   ]
 }

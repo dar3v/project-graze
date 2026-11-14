@@ -105,6 +105,8 @@ export interface ModelCard {
     readonly description: string
     readonly threshold?: number
     readonly flaggedRate?: number
+    /** Share of generated-terrain land cells the app marks low trust (Sandbox defaults, several seeds). */
+    readonly generatedTerrainFlaggedRate?: number
   }
   readonly limitations?: readonly string[]
 }

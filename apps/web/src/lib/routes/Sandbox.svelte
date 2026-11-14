@@ -1,80 +1,79 @@
 <script lang="ts">
-  import { onDestroy } from 'svelte'
+  import { onDestroy, onMount } from 'svelte'
   import { modelStatus, predictBatch } from '../model/client.ts'
   import { heightmapToInputs, sampleAt } from '../deps/features.ts'
   import type { TerrainInputs } from '../deps/features.ts'
+  import { posesToPositions, type InterpolatedPoses } from '../deps/herd.ts'
   import { inputSpec } from '../model/modelCard.ts'
   import SiteProbe from '../probe/SiteProbe.svelte'
   import { classColor } from '../sandbox/palette.ts'
-  import { selectCell, selectedCell } from '../sandbox/selection.ts'
+  import { buildSavedWorld, fetchWorld, modelMismatchNotice, parseWorldHash, restoreWorld, saveWorld, worldShareHash } from '../sandbox/worldIo.ts'
+  import SettingsPanel from '../settings/SettingsPanel.svelte'
   import SimPanel from '../sim/SimPanel.svelte'
-  import { CELL_SIZE_M, generateTerrain, GRID, reliefBand, waterLevelForShare } from '../world/terrain.ts'
+  import { helpOpen, isTypingTarget } from '../help/help.ts'
+  import {
+    installTerrain,
+    probeOpen,
+    selectCell,
+    selectedCell,
+    terrainFor,
+    terrainVersion,
+    viewMode,
+    worldConfig,
+    worldKeyOf,
+    type ViewMode,
+  } from '../state/appState.ts'
+  import { PREDICTION_NOTICE, WORLD_FEATURES } from '../state/worldFeatures.ts'
+  import { CELL_SIZE_M, COVERTYPE_ELEVATION, GRID, reliefBand, waterLevelForShare } from '../world/terrain.ts'
   import WorldView from '../world/WorldView.svelte'
 
   const DEBOUNCE_MS = 250
-  /** Relief as a share of the elevation range (Role 1's default). */
-  const RELIEF = 0.2
 
-  let terrainSeed = $state(7)
-  let waterShare = $state(12)
-  /**
-   * Where the terrain's elevation band sits in the model's training range, in
-   * percent (Role 1's `center`). Elevation drives the prediction most, so a
-   * fixed mid-range band (50%) gives an almost single-class map; 40% opens on
-   * a Lodgepole/Ponderosa mix. Relief stays at Role 1's 20% default: wider
-   * bands push most cells out of the training range.
-   */
-  let bandCenter = $state(40)
-  let probeOpen = $state(false)
-  /** Bumped by "Reset terrain" to regenerate the same seed (drops brush edits). */
-  let terrainVersion = $state(0)
+  const card = $derived($modelStatus.state === 'ready' ? $modelStatus.card : null)
+  // Without a model the world still renders and can be sculpted (D9: "walk
+  // mode stays usable with a predictions-unavailable state"). The generator
+  // then scales into Covertype's documented elevation range.
+  const elevation = $derived.by(() => {
+    if (!card) return COVERTYPE_ELEVATION
+    const e = inputSpec(card, 'elevation')
+    return { min: e.min, max: e.max }
+  })
+
+  // Terrain from the shared store. The entry is cached in appState, so
+  // leaving this page and coming back keeps brush edits. WorldView's brush
+  // edits `entry.heightmap` IN PLACE and then calls onheightmapchange.
+  const entry = $derived(terrainFor($worldConfig, $terrainVersion, elevation))
+  const heightM = $derived(entry.heightmap)
+  const band = $derived(reliefBand(elevation, $worldConfig.relief, $worldConfig.center))
+
+  // Water level in meters for the chosen share of cells. Recomputed when the
+  // slider or the terrain identity changes, not on every brush stroke, so
+  // sculpting below the water line floods instead of moving the water.
+  const waterLevel = $derived(waterLevelForShare(heightM, $worldConfig.waterShare))
+
+  let cells: TerrainInputs | null = $state.raw(null)
+  $effect(() => {
+    cells = heightmapToInputs(heightM, { size: GRID, cellSizeM: CELL_SIZE_M, waterLevelM: waterLevel })
+  })
 
   let cover: Uint8Array | null = $state.raw(null)
   let confidence: Float32Array | null = $state.raw(null)
   let ood: Uint8Array | null = $state.raw(null)
   let batchInfo: { oodCount: number; invalidCount: number } | null = $state(null)
   let mapVersion = $state(0)
+  /** worldKeyOf() of the terrain the current cover map was predicted for. */
+  let coverWorldKey = $state('')
   let predicting = $state(false)
   let predictError: string | null = $state(null)
-  let positions: { herbivores: Float32Array; predators: Float32Array } | null = $state.raw(null)
-
-  const card = $derived($modelStatus.state === 'ready' ? $modelStatus.card : null)
-  const elevation = $derived(card ? inputSpec(card, 'elevation') : null)
-
-  // The heightmap is mutable: WorldView's brush edits it IN PLACE and then
-  // calls onheightmapchange. It is replaced (new identity) only when the seed,
-  // the band center, the model's elevation range or terrainVersion changes. Relief and the
-  // elevation band come from Role 1's generator defaults (20% of the range).
-  let heightM: Float32Array | null = $state.raw(null)
-  $effect(() => {
-    void terrainVersion
-    if (!elevation) return
-    heightM = generateTerrain({
-      seed: Number(terrainSeed) || 0,
-      center: bandCenter / 100,
-      relief: RELIEF,
-      elevation: { min: elevation.min, max: elevation.max },
-    }).heightmap
-  })
-
-  // Water level in meters for the chosen share of cells. Recomputed when the
-  // slider or the terrain identity changes, not on every brush stroke, so
-  // sculpting below the water line floods instead of moving the water.
-  const band = $derived(elevation ? reliefBand(elevation, RELIEF, bandCenter / 100) : null)
-
-  const waterLevel = $derived(heightM ? waterLevelForShare(heightM, waterShare / 100) : 0)
-
-  let cells: TerrainInputs | null = $state.raw(null)
-  $effect(() => {
-    if (heightM) cells = heightmapToInputs(heightM, { size: GRID, cellSizeM: CELL_SIZE_M, waterLevelM: waterLevel })
-  })
+  let poses: InterpolatedPoses | null = $state.raw(null)
+  const positions = $derived(poses ? { herbivores: posesToPositions(poses.herbivores), predators: posesToPositions(poses.predators) } : null)
 
   function onHeightmapChange(): void {
-    // Water distance is global, so the whole grid is recomputed (~16k cells).
-    if (heightM) cells = heightmapToInputs(heightM, { size: GRID, cellSizeM: CELL_SIZE_M, waterLevelM: waterLevel })
+    // Water distance is global, so the whole grid is recomputed (~16k cells, ~4 ms).
+    cells = heightmapToInputs(heightM, { size: GRID, cellSizeM: CELL_SIZE_M, waterLevelM: waterLevel })
     // Refresh an open probe so it shows the sculpted cell, not stale values.
     const sel = $selectedCell
-    if (probeOpen && sel && cells) pick(sel.x, sel.y)
+    if ($probeOpen && sel) pick(sel.x, sel.y)
   }
 
   let timer: ReturnType<typeof setTimeout> | undefined
@@ -83,12 +82,14 @@
   // Debounced batch prediction whenever the terrain (or the model) changes.
   $effect(() => {
     const c = cells
-    if (!c) return
+    const ready = !!card
+    const key = worldKeyOf($worldConfig)
     clearTimeout(timer)
-    timer = setTimeout(() => runBatch(c.packed), DEBOUNCE_MS)
+    if (!c || !ready) return
+    timer = setTimeout(() => runBatch(c.packed, key), DEBOUNCE_MS)
   })
 
-  async function runBatch(inputs: Float32Array): Promise<void> {
+  async function runBatch(inputs: Float32Array, key: string): Promise<void> {
     const mine = ++seq
     predicting = true
     predictError = null
@@ -99,6 +100,7 @@
       confidence = r.confidence
       ood = r.ood
       batchInfo = { oodCount: r.oodCount, invalidCount: r.invalidCount }
+      coverWorldKey = key
       mapVersion++
     } catch (err) {
       if (mine === seq) predictError = err instanceof Error ? err.message : String(err)
@@ -107,18 +109,27 @@
     }
   }
 
-  onDestroy(() => clearTimeout(timer))
+  /**
+   * One prediction state for every view (orbit overlay, walk HUD):
+   * loading | predicting | ready | unavailable (no model) | failed (this batch).
+   */
+  const predictionState = $derived(
+    $modelStatus.state === 'loading' ? 'loading' : $modelStatus.state === 'error' ? 'unavailable' : predictError ? 'failed' : predicting ? 'predicting' : 'ready',
+  )
+  const busy = $derived(predictionState === 'loading' ? 'Loading the model…' : predictionState === 'predicting' ? 'Predicting…' : null)
 
+  // The one selection event (D9): orbit clicks (WorldView onpick) and, once
+  // ROLE-1 D11 lands, "inspect cell underfoot" in walk mode both call this.
   function pick(x: number, y: number): void {
     if (!cells) return
     const i = y * GRID + x
     selectCell({ x, y, sample: sampleAt(cells.packed, i), water: cells.water[i] === 1 })
-    probeOpen = true
+    probeOpen.set(true)
   }
 
   function manualProbe(): void {
     selectCell(null)
-    probeOpen = true
+    probeOpen.set(true)
   }
 
   const counts = $derived.by(() => {
@@ -132,111 +143,331 @@
     }
     return { out, land }
   })
+
+  // ---- view mode, settings, help ---------------------------------------
+
+  let settingsOpen = $state(false)
+
+  function setMode(m: ViewMode): void {
+    if (m === 'walk' && !WORLD_FEATURES.walkMode) return
+    viewMode.set(m)
+  }
+
+  function onkeydown(e: KeyboardEvent): void {
+    if (isTypingTarget(e.target) || e.ctrlKey || e.metaKey || e.altKey || $helpOpen) return
+    if (e.key === 'v' || e.key === 'V') setMode($viewMode === 'orbit' ? 'walk' : 'orbit')
+  }
+
+  // ---- terrain controls (write the shared store) -------------------------
+
+  function setSeed(v: number): void {
+    if (Number.isFinite(v)) worldConfig.update((c) => ({ ...c, seed: Math.trunc(v) }))
+  }
+
+  // ---- save, share, load (D12) ---------------------------------------------
+
+  let shareState: { kind: 'idle' } | { kind: 'busy'; what: string } | { kind: 'saved'; id: string; url: string } | { kind: 'error'; message: string } = $state({ kind: 'idle' })
+  let worldNotice: string | null = $state(null)
+  let codeInput = $state('')
+  let copied = $state(false)
+
+  async function save(): Promise<void> {
+    if (!card) return
+    shareState = { kind: 'busy', what: 'Saving…' }
+    const world = buildSavedWorld($worldConfig, card.model.version, elevation, entry.base, entry.heightmap)
+    const r = await saveWorld(world)
+    if (!r.ok) {
+      shareState = { kind: 'error', message: r.message }
+      return
+    }
+    const url = new URL(worldShareHash(r.value.id), location.href).href
+    shareState = { kind: 'saved', id: r.value.id, url }
+  }
+
+  async function copyLink(url: string): Promise<void> {
+    try {
+      await navigator.clipboard.writeText(url)
+      copied = true
+      setTimeout(() => (copied = false), 1500)
+    } catch {
+      copied = false
+    }
+  }
+
+  async function load(id: string): Promise<void> {
+    shareState = { kind: 'busy', what: 'Loading the saved world…' }
+    worldNotice = null
+    const r = await fetchWorld(id)
+    if (!r.ok) {
+      shareState = { kind: 'error', message: r.message }
+      return
+    }
+    const restored = restoreWorld(r.value)
+    // Install first, then point the store at it, so the Sandbox picks up the
+    // loaded heightmap (with its edits) instead of regenerating. Predictions
+    // are never stored: the batch effect re-predicts with the current model.
+    const version = $terrainVersion
+    installTerrain(restored.config, version, elevation, restored.base, restored.heightmap)
+    worldConfig.set(restored.config)
+    probeOpen.set(false)
+    shareState = { kind: 'idle' }
+    const current = card?.model.version
+    worldNotice = current ? modelMismatchNotice(r.value.modelVersion, current) : null
+    loadedFrom = id
+  }
+
+  let loadedFrom: string | null = $state(null)
+
+  function loadFromInput(): void {
+    const text = codeInput.trim()
+    const id = parseWorldHash(text.includes('#') ? text.slice(text.indexOf('#')) : `#/world/${text.toLowerCase()}`)
+    if (!id) {
+      shareState = { kind: 'error', message: 'That is not a world code. A code is 10 letters and digits, or paste the whole share link.' }
+      return
+    }
+    location.hash = worldShareHash(id)
+  }
+
+  // A world link is loaded once the model has settled (ready or failed), so
+  // the terrain is built for the final elevation range and not regenerated.
+  let pendingId: string | null = $state(null)
+
+  function onHash(): void {
+    const id = parseWorldHash(location.hash)
+    if (id && id !== loadedFrom) pendingId = id
+  }
+
+  $effect(() => {
+    if (pendingId && $modelStatus.state !== 'loading') {
+      const id = pendingId
+      pendingId = null
+      void load(id)
+    }
+  })
+
+  onMount(() => {
+    onHash()
+    window.addEventListener('hashchange', onHash)
+  })
+
+  onDestroy(() => {
+    clearTimeout(timer)
+    window.removeEventListener('hashchange', onHash)
+  })
 </script>
+
+<svelte:window {onkeydown} />
 
 <section class="section" aria-labelledby="sandbox-title">
   <h2 id="sandbox-title" class="visually-hidden">Sandbox</h2>
 
-  {#if $modelStatus.state === 'loading'}
-    <p class="muted center">Loading the model…</p>
-  {:else if $modelStatus.state === 'error'}
+  {#if $modelStatus.state === 'error'}
     <div class="notice error" role="alert">
-      <strong>No predictions without a model.</strong> The sandbox needs <code>model.json</code> and <code>model_card.json</code>.
-      You can still read the <a href="#/responsible-use">Responsible Use</a> page.
+      <strong>Predictions unavailable.</strong> The model files (<code>model.json</code>, <code>model_card.json</code>) did not load, so there
+      is no cover map, Site Probe or herd simulation. You can still sculpt and explore the terrain, and read the
+      <a href="#/responsible-use">Responsible Use</a> page.
     </div>
-  {:else if card && cells && heightM && elevation}
-    <p class="hint muted">
-      Select a cell to probe it. Raise, lower or flatten the ground and the cover map is predicted again in your browser. Right-drag to orbit, scroll to zoom.
-    </p>
+  {/if}
 
-    <div class="map">
-      <WorldView
-        heightmap={heightM}
-        size={GRID}
-        cellSizeM={CELL_SIZE_M}
-        waterLevelM={waterLevel}
-        elevation={{ min: elevation.min, max: elevation.max }}
-        classes={card.classes}
-        {cover}
-        {confidence}
-        {ood}
-        selected={probeOpen ? $selectedCell : null}
-        herbivores={positions?.herbivores ?? null}
-        predators={positions?.predators ?? null}
-        busy={predicting ? 'Predicting…' : null}
-        onpick={pick}
-        onheightmapchange={onHeightmapChange}
+  <div class="viewbar">
+    <div class="seg" role="radiogroup" aria-label="View mode">
+      <button type="button" role="radio" aria-checked={$viewMode === 'orbit'} class:active={$viewMode === 'orbit'} onclick={() => setMode('orbit')}>Orbit</button>
+      <button
+        type="button"
+        role="radio"
+        aria-checked={$viewMode === 'walk'}
+        class:active={$viewMode === 'walk'}
+        disabled={!WORLD_FEATURES.walkMode}
+        title={WORLD_FEATURES.walkMode ? 'Walk at ground level (V)' : 'Walk mode comes with the 3D world update (Role 1)'}
+        onclick={() => setMode('walk')}>Walk <kbd>V</kbd></button
+      >
+    </div>
+    <div class="right">
+      <button type="button" onclick={() => (settingsOpen = !settingsOpen)} aria-expanded={settingsOpen}>Settings</button>
+      <button type="button" onclick={() => helpOpen.set(true)} aria-haspopup="dialog">Help <kbd>?</kbd></button>
+    </div>
+  </div>
+
+  {#if settingsOpen}
+    <SettingsPanel onclose={() => (settingsOpen = false)} />
+  {/if}
+
+  <p class="hint muted">
+    Select a cell to probe it. Raise, lower or flatten the ground and the cover map is predicted again in your browser. Right-drag to orbit, scroll to zoom.
+  </p>
+
+  {#if worldNotice}
+    <p class="notice warn" role="status">{worldNotice} <button type="button" class="link" onclick={() => (worldNotice = null)}>Dismiss</button></p>
+  {/if}
+
+  <div class="map">
+    <WorldView
+      heightmap={heightM}
+      size={GRID}
+      cellSizeM={CELL_SIZE_M}
+      waterLevelM={waterLevel}
+      elevation={{ min: elevation.min, max: elevation.max }}
+      classes={card?.classes ?? []}
+      {cover}
+      {confidence}
+      {ood}
+      selected={$probeOpen ? $selectedCell : null}
+      herbivores={positions?.herbivores ?? null}
+      predators={positions?.predators ?? null}
+      {busy}
+      onpick={card ? pick : undefined}
+      onheightmapchange={onHeightmapChange}
+    />
+  </div>
+
+  <p class="world-notice">{PREDICTION_NOTICE}</p>
+
+  <p class="status muted" aria-live="polite">
+    {#if predictionState === 'unavailable'}
+      <span class="err">Predictions unavailable: no model loaded.</span>
+    {:else if predictionState === 'loading'}
+      Loading the model…
+    {:else if predictionState === 'failed'}
+      <span class="err">Prediction failed: {predictError}</span>
+    {:else if predictionState === 'predicting'}
+      Predicting {GRID * GRID} cells in the browser…
+    {:else if batchInfo && cells}
+      {GRID * GRID} cells predicted in the browser · {batchInfo.oodCount} low trust{batchInfo.invalidCount ? ` · ${batchInfo.invalidCount} invalid` : ''}{cells.hasWater
+        ? ''
+        : ' · no water on this map'}
+    {/if}
+  </p>
+
+  {#if counts && card}
+    <ul class="legend" aria-label="Share of land per predicted cover type">
+      <li class="label">Share of land</li>
+      {#each card.classes as name, i (i)}
+        <li>
+          <span class="sw" style:background={classColor(i)}></span>{name}
+          <span class="pct">{counts.land ? Math.round((counts.out[i] / counts.land) * 100) : 0}%</span>
+        </li>
+      {/each}
+    </ul>
+  {/if}
+
+  <div class="controls">
+    <label>
+      <span class="label">Terrain seed</span>
+      <input type="number" step="1" value={$worldConfig.seed} onchange={(e) => setSeed(Number(e.currentTarget.value))} />
+    </label>
+    <label>
+      <span class="label">Elevation · {Math.round(band.min)}–{Math.round(band.max)} m</span>
+      <input
+        type="range"
+        min="0"
+        max="100"
+        step="5"
+        value={Math.round($worldConfig.center * 100)}
+        oninput={(e) => worldConfig.update((c) => ({ ...c, center: Number(e.currentTarget.value) / 100 }))}
       />
-    </div>
+    </label>
+    <label>
+      <span class="label">Water level · {Math.round($worldConfig.waterShare * 100)}% of cells</span>
+      <input
+        type="range"
+        min="0"
+        max="40"
+        step="1"
+        value={Math.round($worldConfig.waterShare * 100)}
+        oninput={(e) => worldConfig.update((c) => ({ ...c, waterShare: Number(e.currentTarget.value) / 100 }))}
+      />
+    </label>
+    <button type="button" onclick={() => terrainVersion.update((v) => v + 1)}>Reset terrain</button>
+    <button type="button" onclick={manualProbe} disabled={!card}>Enter values manually</button>
+  </div>
 
-    <p class="status muted" aria-live="polite">
-      {#if predictError}
-        <span class="err">Prediction failed: {predictError}</span>
-      {:else if predicting}
-        Predicting {GRID * GRID} cells in the browser…
-      {:else if batchInfo}
-        {GRID * GRID} cells predicted in the browser · {batchInfo.oodCount} outside the training range{batchInfo.invalidCount
-          ? ` · ${batchInfo.invalidCount} invalid`
-          : ''}{cells.hasWater ? '' : ' · no water on this map'}
+  <div class="share" aria-labelledby="share-title">
+    <h3 id="share-title" class="label">Save and share</h3>
+    <div class="share-row">
+      <button type="button" onclick={save} disabled={!card || shareState.kind === 'busy'}>Save and get a link</button>
+      <form
+        class="load"
+        onsubmit={(e) => {
+          e.preventDefault()
+          loadFromInput()
+        }}
+      >
+        <input type="text" bind:value={codeInput} placeholder="World code or link" aria-label="World code or share link" maxlength="300" spellcheck="false" autocomplete="off" />
+        <button type="submit" disabled={!codeInput.trim() || shareState.kind === 'busy'}>Open</button>
+      </form>
+    </div>
+    <p class="muted small" aria-live="polite">
+      {#if shareState.kind === 'busy'}
+        {shareState.what}
+      {:else if shareState.kind === 'saved'}
+        Saved. Code <strong>{shareState.id}</strong> · <a href={shareState.url}>{shareState.url}</a>
+        <button type="button" class="link" onclick={() => shareState.kind === 'saved' && copyLink(shareState.url)}>{copied ? 'Copied' : 'Copy link'}</button>
+      {:else if shareState.kind === 'error'}
+        <span class="err">{shareState.message}</span>
+      {:else}
+        Saves the seed, the sliders and your brush edits, plus the model version. No predictions and no personal data.
       {/if}
     </p>
+  </div>
 
-    {#if counts}
-      <ul class="legend" aria-label="Share of land per predicted cover type">
-        <li class="label">Share of land</li>
-        {#each card.classes as name, i (i)}
-          <li>
-            <span class="sw" style:background={classColor(i)}></span>{name}
-            <span class="pct">{counts.land ? Math.round((counts.out[i] / counts.land) * 100) : 0}%</span>
-          </li>
-        {/each}
-      </ul>
-    {/if}
+  {#if $probeOpen && card}
+    <SiteProbe {card} selection={$selectedCell} onclose={() => probeOpen.set(false)} />
+  {/if}
 
-    <div class="controls">
-      <label>
-        <span class="label">Terrain seed</span>
-        <input type="number" step="1" bind:value={terrainSeed} />
-      </label>
-      <label>
-        <span class="label">Elevation · {band ? `${Math.round(band.min)}–${Math.round(band.max)} m` : ''}</span>
-        <input type="range" min="0" max="100" step="5" bind:value={bandCenter} />
-      </label>
-      <label>
-        <span class="label">Water level · {waterShare}% of cells</span>
-        <input type="range" min="0" max="40" step="1" bind:value={waterShare} />
-      </label>
-      <button type="button" onclick={() => terrainVersion++}>Reset terrain</button>
-      <button type="button" onclick={manualProbe}>Enter values manually</button>
-    </div>
-
-    {#if probeOpen}
-      <SiteProbe {card} selection={$selectedCell} onclose={() => (probeOpen = false)} />
-    {/if}
-
-    <SimPanel size={GRID} {cover} water={cells.water} classes={card.classes} {mapVersion} onpositions={(p) => (positions = p)} />
+  {#if card && cells}
+    <SimPanel size={GRID} {cover} water={cells.water} classes={card.classes} {mapVersion} worldKey={coverWorldKey} onposes={(p) => (poses = p)} />
   {/if}
 </section>
 
 <style>
-  .center {
-    text-align: center;
-  }
-
   .hint {
     text-align: center;
     font-size: 11px;
-    margin: 0 0 14px;
+    margin: 14px 0;
+  }
+
+  .viewbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .seg,
+  .right {
+    display: flex;
+    gap: 4px;
+  }
+
+  .seg button.active {
+    color: var(--text);
+    border-color: var(--text-2);
+    background: var(--fill);
+  }
+
+  kbd {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--text-3);
+    margin-left: 4px;
   }
 
   .map {
     margin-top: 8px;
   }
 
+  .world-notice {
+    text-align: center;
+    font-size: 11px;
+    color: var(--text-2);
+    margin-top: 8px;
+  }
+
   .status {
     text-align: center;
     font-size: 11px;
-    margin-top: 10px;
+    margin-top: 6px;
     min-height: 1.6em;
   }
 
@@ -279,6 +510,52 @@
   .controls label {
     display: grid;
     gap: 6px;
+  }
+
+  .share {
+    margin-top: 28px;
+    display: grid;
+    gap: 8px;
+  }
+
+  .share-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .load {
+    display: flex;
+    gap: 8px;
+    flex: 1 1 260px;
+    min-width: 0;
+  }
+
+  .load input {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .small {
+    font-size: 11px;
+    overflow-wrap: anywhere;
+  }
+
+  .small strong {
+    color: var(--text);
+    font-weight: 500;
+  }
+
+  button.link {
+    border: 0;
+    padding: 0;
+    background: none;
+    color: var(--accent);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    font-size: inherit;
+    text-transform: none;
+    letter-spacing: normal;
   }
 
   code {

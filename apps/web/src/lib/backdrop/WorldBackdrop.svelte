@@ -2,6 +2,8 @@
   // Full-viewport background. Black by default; fades in Role 1's 3D world
   // (src/lib/world/index.ts -> mountWorld) underneath a black dimming layer.
   import { onDestroy, onMount } from 'svelte'
+  import { get } from 'svelte/store'
+  import { reducedMotion as reducedMotionStore } from '../state/settings.ts'
   import type { WorldHandle, WorldModule } from './worldContract.ts'
 
   /** Opacity of the black layer over the 3D world (0 = no dimming, 1 = black). */
@@ -22,7 +24,8 @@
     try {
       const mod = await load()
       if (destroyed || typeof mod.mountWorld !== 'function') return
-      const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+      // The viewer's Motion setting (D11), which follows the system preference by default.
+      const reducedMotion = get(reducedMotionStore)
       handle = await mod.mountWorld(host, { reducedMotion })
       if (destroyed) {
         handle.destroy()

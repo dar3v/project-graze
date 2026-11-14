@@ -63,8 +63,9 @@ Water: a cell is water when its height is strictly below the water level.
 { classIndex: number, probs: number[] /* length = classes.length */, ood: boolean }
 ```
 
-The app's `Prediction` adds `oodReasons: string[]` (plain language),
-`outOfRange: RawInputKey[]`, and `stub: boolean`.
+The app's `Prediction` adds `oodReasons: string[]` (plain language) and
+`outOfRange: RawInputKey[]`. (The `stub` flag was removed on Nov 14 with the
+stub predictor.)
 
 `ood` is true when any raw input is outside its training range in
 `model_card.json`, **or** when `model.json` ships a detector and it fires.
@@ -131,7 +132,7 @@ Implemented in `apps/web/src/lib/model/protocol.ts` and `worker.ts`.
 
 | Main → Worker | Worker → Main |
 | --- | --- |
-| `init { baseUrl, allowStub }` | `ready { card, stub, loadError?, warnings }` or `fatal { message }` |
+| `init { baseUrl }` | `ready { card, warnings }` or `fatal { message }` |
 | `predictBatch { id, inputs: Float32Array }` (transferred) | `predictBatchResult { id, result: { classIndex: Uint8Array, confidence: Float32Array, ood: Uint8Array, oodCount, invalidCount } }` |
 | `predictOne { id, sample }` | `predictOneResult { id, prediction }` |
 | `explainOne { id, sample }` | `explainOneResult { id, explanation: { prediction, sentence, method, sensitivities } }` |
@@ -155,9 +156,15 @@ function, it replaces `createEngine().explainOne` in
 
 - **Cell selection (Role 1 → Role 2):** call `selectCell({ x, y, sample, water })`
   from `apps/web/src/lib/sandbox/selection.ts`. The Site Probe opens prefilled.
-- **Animal positions (Role 2 → Role 1):** `getPositions(simState)` from
-  `packages/sim/herd` returns `{ herbivores, predators }` as interleaved
-  `Float32Array [x0, y0, x1, y1, ...]` in cell coordinates.
+- **Animal positions (Role 2 → Role 1):** `WorldView` gets `herbivores` and
+  `predators` as interleaved `Float32Array [x0, y0, x1, y1, ...]` in cell
+  coordinates, interpolated between sim ticks every frame while the sim runs.
+  Poses with heading (`[x, y, heading, ...]`, `POSE_STRIDE = 3`) come from
+  `snapshotPoses` / `interpolateSnapshot` in `packages/sim/herd/src/view.ts`.
+  Ground height: `sampleHeight(heightmap, size, x, y)` (bilinear). See
+  `docs/app-state.md`.
+- **Saved worlds (Role 2, D12):** format in `packages/worlds`, API in
+  `docs/worlds-api.md`.
 - **Terrain → raw inputs:** `@graze/features` is the only implementation.
   `heightmapToInputs` returns the packed `Float32Array` (the app's Worker
   batch); `heightmapToSamples` returns one `TerrainSample` per cell in

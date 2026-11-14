@@ -202,3 +202,35 @@ Still to do by a human: post it to the team, and confirm with Role 2
 that `docs/feature-contract.md`'s Worker table is updated. That table still
 lists the removed `allowStub` and `stub` fields.
 
+
+## 9. Measured inference latency (D10) *(agent draft, measured 2026-11-14)*
+
+Measured with `pnpm ml:bench`. The raw output is in `ml/reports/latency.json`.
+
+- **Machine:** Intel Core i7-11700 @ 2.50 GHz, 16 logical cores, 31 GB RAM.
+  Fedora Linux, kernel 7.2.11.
+- **Runtime:** Node v24.18.0, on a single thread.
+- **Model:** softmax, `modelVersion` 0.1.0-dev.
+- **Code timed:** the app's own engine code (`apps/web/src/lib/model`)
+  running on the shipped model files.
+
+These are Node numbers, **not browser numbers**. They leave out the
+browser fetch, Worker startup, `postMessage` copies and rendering.
+
+| Step | Runs | Median | p95 | Max |
+|---|---|---|---|---|
+| Model load, first (read + parse + validate + build engine) | 1 | 1.21 ms | | |
+| Model load, warm | 50 | 0.21 ms | 0.38 ms | 1.04 ms |
+| `heightmapToInputs`, 128×128 | 100 | 3.81 ms | 4.99 ms | 6.14 ms |
+| `predictBatch`, full 128×128 grid (16,384 cells) | 200 | 16.2 ms | 18.2 ms | 19.2 ms |
+| `predictBatch`, 16×16 dirty region (256 cells) | 200 | 0.27 ms | 0.39 ms | 0.52 ms |
+| `predictOne`, per call | 100×1000 | 0.97 µs | 1.17 µs | 1.38 µs |
+| `explainOne`, per call | 50×100 | 15.6 µs | 18.3 µs | 30.1 µs |
+
+**Dirty-region fallback.** The two full-grid steps together, inputs and
+`predictBatch`, take about 20 ms per edit. The Worker runs them off the
+main thread, so this does not block rendering. A dirty-region path, which
+re-predicts only the edited cells, is about 60× cheaper.
+`ml/test/dirtyRegion.test.ts` checks that it gives the same result as the
+full grid for those cells. Whether Role 2 uses it depends on how brush
+editing feels in the browser, and this note does not measure that.

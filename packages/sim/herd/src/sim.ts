@@ -19,6 +19,8 @@ export interface Animal {
   readonly id: number
   x: number
   y: number
+  /** Facing in radians, atan2(dy, dx) in grid coordinates (+x east, +y south). Updated when the animal moves. */
+  heading: number
   energy: number
   age: number
 }
@@ -50,7 +52,7 @@ export interface SimState {
   readonly maxBiomass: Float32Array
   readonly regrowth: Float32Array
   readonly biomass: Float32Array
-  readonly totalCapacity: number
+  totalCapacity: number
   readonly rules: EcologyRules
   readonly seed: number
   herbivores: Animal[]
@@ -72,6 +74,8 @@ export interface CreateSimOptions {
 }
 
 export class SimInputError extends Error {}
+
+const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5))
 
 export function createSim(opts: CreateSimOptions): SimState {
   const { width, height, cover, rules } = opts
@@ -145,10 +149,14 @@ function spawn(state: SimState, rng: Rng, landCells: readonly number[], rules: S
   const out: Animal[] = []
   for (let k = 0; k < rules.initialCount; k++) {
     const cell = landCells[rng.int(landCells.length)]
+    const id = state.nextId++
     out.push({
-      id: state.nextId++,
+      id,
       x: cell % state.width,
       y: Math.floor(cell / state.width),
+      // Golden-angle spread: varied starting headings without drawing from the RNG,
+      // so adding headings did not change any run.
+      heading: (id * GOLDEN_ANGLE) % (2 * Math.PI),
       energy: rules.startEnergy,
       age: rng.int(Math.max(1, Math.floor(rules.maxAge / 2))),
     })
@@ -179,6 +187,13 @@ function clampToGrid(state: SimState, x: number, y: number): [number, number] {
   return [Math.min(state.width - 1, Math.max(0, x)), Math.min(state.height - 1, Math.max(0, y))]
 }
 
+/** Move an animal, turning it to face the direction of travel (no turn when it stays put). */
+function moveTo(a: Animal, nx: number, ny: number): void {
+  if (nx !== a.x || ny !== a.y) a.heading = Math.atan2(ny - a.y, nx - a.x)
+  a.x = nx
+  a.y = ny
+}
+
 /** Random passable cell within `radius` of (x, y); stays put if none is found. */
 function wander(state: SimState, rng: Rng, a: Animal, radius: number): void {
   for (let attempt = 0; attempt < 4; attempt++) {
@@ -186,8 +201,7 @@ function wander(state: SimState, rng: Rng, a: Animal, radius: number): void {
     const dy = rng.int(2 * radius + 1) - radius
     const [nx, ny] = clampToGrid(state, a.x + dx, a.y + dy)
     if (state.passable[ny * state.width + nx] === 1) {
-      a.x = nx
-      a.y = ny
+      moveTo(a, nx, ny)
       return
     }
   }
@@ -219,8 +233,7 @@ function graze(state: SimState, rng: Rng, a: Animal): void {
       bestY = ny
     }
   }
-  a.x = bestX
-  a.y = bestY
+  moveTo(a, bestX, bestY)
 }
 
 /** Step toward (tx, ty), shortening the step until it lands on a passable cell. */
@@ -231,8 +244,7 @@ function stepToward(state: SimState, a: Animal, tx: number, ty: number, maxStep:
     const nx = a.x + Math.sign(dx) * Math.min(Math.abs(dx), step)
     const ny = a.y + Math.sign(dy) * Math.min(Math.abs(dy), step)
     if (state.passable[ny * state.width + nx] === 1) {
-      a.x = nx
-      a.y = ny
+      moveTo(a, nx, ny)
       return
     }
   }
@@ -243,7 +255,7 @@ function reproduce(state: SimState, rng: Rng, parent: Animal, rules: SpeciesRule
   if (population + babies.length >= rules.maxPopulation) return
   if (rng.next() >= rules.reproduceChance) return
   parent.energy -= rules.reproduceCost
-  babies.push({ id: state.nextId++, x: parent.x, y: parent.y, energy: rules.reproduceCost, age: 0 })
+  babies.push({ id: state.nextId++, x: parent.x, y: parent.y, heading: parent.heading, energy: rules.reproduceCost, age: 0 })
 }
 
 interface TickCounts {
@@ -386,6 +398,100 @@ export function stepSim(state: SimState, ticks = 1): SimState {
     recordHistory(state)
   }
   return state
+}
+
+export interface MapChange {
+  readonly cover: Uint8Array
+  /** 1 = land, 0 = blocked (water). Defaults to all land. */
+  readonly passable?: Uint8Array
+}
+
+export interface MapChangeResult {
+  /** Animals that stood on a cell that became water and were moved to the nearest land cell. */
+  readonly moved: number
+  /** Animals removed because no land cell was left anywhere. */
+  readonly removed: number
+}
+
+/** Nearest passable cell by Chebyshev rings, scanned in a fixed order (deterministic). */
+function nearestPassable(state: SimState, x: number, y: number): [number, number] | null {
+  const maxR = Math.max(state.width, state.height)
+  for (let r = 1; r <= maxR; r++) {
+    for (let dy = -r; dy <= r; dy++) {
+      for (let dx = -r; dx <= r; dx++) {
+        if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue
+        const nx = x + dx
+        const ny = y + dy
+        if (nx < 0 || ny < 0 || nx >= state.width || ny >= state.height) continue
+        if (state.passable[ny * state.width + nx] === 1) return [nx, ny]
+      }
+    }
+  }
+  return null
+}
+
+/**
+ * The terrain was edited under a running simulation: swap in the new cover
+ * map and water mask WITHOUT restarting. Animals, ages, energy, tick and RNG
+ * state are kept, so the run continues. Rules (docs/ecology-rules.md,
+ * "Terrain edits"):
+ *
+ * - each cell's food capacity and regrowth follow its new cover class; current
+ *   biomass is capped at the new capacity (a cell that just became land starts
+ *   empty and regrows);
+ * - an animal on a cell that became water moves to the nearest land cell
+ *   (Chebyshev rings, fixed scan order); if no land is left it is removed;
+ * - one "info" event summarises what happened.
+ *
+ * Uses no randomness, so it does not change the RNG sequence. Mutates `state`.
+ */
+export function applyMapChange(state: SimState, change: MapChange): MapChangeResult {
+  const n = state.width * state.height
+  const { cover } = change
+  const passable = change.passable ?? new Uint8Array(n).fill(1)
+  if (cover.length !== n) throw new SimInputError(`Cover map has ${cover.length} cells; expected ${n} (${state.width}x${state.height}).`)
+  if (passable.length !== n) throw new SimInputError('Passable mask size does not match the cover map.')
+  const { foodByClass, regrowthByClass } = state.rules.vegetation
+  for (let i = 0; i < n; i++) {
+    if (passable[i] === 1 && cover[i] >= foodByClass.length) {
+      throw new SimInputError(`Cell ${i} has cover class ${cover[i]}, but ecology rules define ${foodByClass.length} classes.`)
+    }
+  }
+
+  let total = 0
+  for (let i = 0; i < n; i++) {
+    state.cover[i] = cover[i]
+    state.passable[i] = passable[i]
+    const max = passable[i] === 1 ? foodByClass[cover[i]] : 0
+    state.maxBiomass[i] = max
+    state.regrowth[i] = passable[i] === 1 ? regrowthByClass[cover[i]] * max : 0
+    if (state.biomass[i] > max) state.biomass[i] = max
+    total += max
+  }
+  state.totalCapacity = total
+
+  let moved = 0
+  let removed = 0
+  const rehome = (list: Animal[]): Animal[] =>
+    list.filter((a) => {
+      if (state.passable[a.y * state.width + a.x] === 1) return true
+      const to = nearestPassable(state, a.x, a.y)
+      if (!to) {
+        removed++
+        return false
+      }
+      moveTo(a, to[0], to[1])
+      moved++
+      return true
+    })
+  state.herbivores = rehome(state.herbivores)
+  state.predators = rehome(state.predators)
+
+  const parts = ['Terrain changed: the herds keep running on the new map']
+  if (moved > 0) parts.push(`${moved} animal${moved === 1 ? '' : 's'} moved off new water`)
+  if (removed > 0) parts.push(`${removed} removed (no land left)`)
+  pushEvent(state, { tick: state.tick, kind: 'info', count: moved + removed, message: parts.join('; ') + '.' })
+  return { moved, removed }
 }
 
 /**

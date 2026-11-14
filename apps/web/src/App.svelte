@@ -6,6 +6,15 @@
   import Sandbox from './lib/routes/Sandbox.svelte'
   import ModelReport from './lib/routes/ModelReport.svelte'
   import ResponsibleUse from './lib/routes/ResponsibleUse.svelte'
+  import HelpOverlay from './lib/help/HelpOverlay.svelte'
+  import { helpOpen, isTypingTarget } from './lib/help/help.ts'
+
+  function onkeydown(e: KeyboardEvent): void {
+    if (e.key === '?' && !e.ctrlKey && !e.metaKey && !e.altKey && !isTypingTarget(e.target)) {
+      e.preventDefault()
+      helpOpen.update((v) => !v)
+    }
+  }
 
   const statusLabel = $derived(
     $modelStatus.state === 'loading'
@@ -16,9 +25,16 @@
   )
 </script>
 
+<svelte:window {onkeydown} />
+
 <WorldBackdrop />
 
-<a class="btn utility" href="#/report" title="Model status. Opens the Model Report.">{statusLabel}</a>
+<div class="utility">
+  <button type="button" class="btn" onclick={() => helpOpen.set(true)} title="Controls help (?)" aria-haspopup="dialog">? help</button>
+  <a class="btn" href="#/report" title="Model status. Opens the Model Report.">{statusLabel}</a>
+</div>
+
+<HelpOverlay />
 
 <div class="shell">
   <header>
@@ -63,6 +79,11 @@
     top: 16px;
     right: 16px;
     z-index: 10;
+    display: flex;
+    gap: 6px;
+  }
+
+  .utility .btn {
     font-size: 10px;
     padding: 5px 10px;
     background: rgba(8, 10, 13, 0.85);

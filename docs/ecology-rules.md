@@ -43,6 +43,37 @@ Animals never stand on water. Every random draw comes from one seeded PRNG
 stored in the sim state, so **the same map, rules and seed always give the
 same run** (unit-tested in `packages/sim/herd/test/sim.test.ts`).
 
+## Terrain edits
+
+What happens when the map changes under a sim, in `SimPanel.svelte` and
+`applyMapChange` in `sim.ts`:
+
+- **New landscape** (a new terrain seed, band center, relief, roughness or
+  valley; or a loaded world): the sim restarts with the same sim seed on the
+  first cover map predicted for the new terrain. The same terrain plus the
+  same sim seed always gives the same run.
+- **Same landscape, edited** (brush strokes, the water slider): the run keeps
+  going.
+  - Animals, ages, energy, tick count and RNG state are kept.
+  - Each cell's food capacity and regrowth follow its new predicted class.
+    Biomass is capped at the new capacity, and a cell that just rose out of
+    the water starts empty and regrows.
+  - An animal standing on a cell that is now water moves to the nearest land
+    cell (Chebyshev rings, fixed scan order).
+  - If no land is left at all, the animals are removed.
+  - One "Terrain changed" line goes to the event log.
+  - No random numbers are drawn, so a recorded sequence of edits replays
+    exactly (unit-tested in `packages/sim/herd/test/view.test.ts`).
+
+## Rendering contract
+
+The sim has no rendering code. The renderer (Role 1) reads
+`snapshotPoses` / `interpolateSnapshot` from `packages/sim/herd/src/view.ts`,
+which give `[x, y, heading]` per animal in grid-cell coordinates. It lifts
+each animal onto the ground with `sampleHeight` (bilinear). The sim ticks on
+its own clock, and the page interpolates between ticks every frame. Details
+are in `docs/app-state.md`, "Sim view for the renderer".
+
 ## Values and rationale
 
 Per cover class, in `model_card.json` class order. The current values assume

@@ -1,15 +1,20 @@
 <script lang="ts">
-  import { onDestroy } from 'svelte'
+  import { onDestroy, untrack } from 'svelte'
   import {
+    applyMapChange,
     computeScore,
     createSim,
     defaultEcology,
-    getPositions,
+    interpolateSnapshot,
     SCORE_WINDOW,
+    snapshotPoses,
     stepSim,
     validateRules,
+    type InterpolatedPoses,
+    type SimSnapshot,
     type SimState,
   } from '../deps/herd.ts'
+  import { reducedMotion } from '../state/settings.ts'
   import EventLog from './EventLog.svelte'
   import PopulationChart from './PopulationChart.svelte'
   import RulesTable from './RulesTable.svelte'
@@ -21,10 +26,21 @@
     classes: readonly string[]
     /** Increments whenever the cover map is replaced. */
     mapVersion: number
-    onpositions: (p: { herbivores: Float32Array; predators: Float32Array } | null) => void
+    /**
+     * Identity of the landscape `cover` was predicted for (seed and generator
+     * options). A new key re-seeds the sim; the same key with a new map
+     * (brush edit, water level) keeps the herds running on the new map.
+     */
+    worldKey: string
+    /**
+     * Animal poses for the renderer, [x, y, heading] per animal in grid cells
+     * (packages/sim/herd/src/view.ts). Called once per animation frame while
+     * running (interpolated between ticks), and after every change.
+     */
+    onposes: (p: InterpolatedPoses | null) => void
   }
 
-  let { size, cover, water, classes, mapVersion, onpositions }: Props = $props()
+  let { size, cover, water, classes, mapVersion, worldKey, onposes }: Props = $props()
 
   const rulesResult = $derived(validateRules(defaultEcology, classes.length))
 
@@ -33,37 +49,66 @@
   let running = $state(false)
   let seed = $state(1)
   let speed = $state(2)
-  let simMapVersion = $state(-1)
   let simError: string | null = $state(null)
+  /** Map and world the running sim was last given (plain variables: read inside the effect without tracking). */
+  let simMapVersion = -1
+  let simWorldKey = ''
 
+  /** Sim clock: one step of `speed` ticks every TICK_MS, independent of the frame rate. */
   const TICK_MS = 100
   let timer: ReturnType<typeof setInterval> | undefined
+  let raf = 0
+  let prevSnap: SimSnapshot | null = null
+  let nextSnap: SimSnapshot | null = null
+  let lastStepAt = 0
 
   const score = $derived.by(() => {
     void version
     return sim ? computeScore(sim) : null
   })
-  const stale = $derived(sim !== null && simMapVersion !== mapVersion)
 
-  function publish(): void {
+  function passableFromWater(): Uint8Array {
+    const passable = new Uint8Array(water.length)
+    for (let i = 0; i < water.length; i++) passable[i] = water[i] ? 0 : 1
+    return passable
+  }
+
+  /** Poses at fraction t of the way from the previous step to the latest one. */
+  function emit(t: number): void {
+    onposes(sim && nextSnap ? interpolateSnapshot(prevSnap, nextSnap, t) : null)
+  }
+
+  /** Record a new state: the previous snapshot becomes the interpolation start. */
+  function snap(keepPrev: boolean): void {
+    prevSnap = keepPrev ? nextSnap : null
+    nextSnap = sim ? snapshotPoses(sim) : null
+    lastStepAt = performance.now()
     version++
-    onpositions(sim ? getPositions(sim) : null)
+    if (!running || $reducedMotion) emit(1)
+  }
+
+  function frame(now: number): void {
+    raf = 0
+    if (!running) return
+    emit((now - lastStepAt) / TICK_MS)
+    raf = requestAnimationFrame(frame)
   }
 
   function reset(): void {
+    const wasRunning = running
     pause()
     simError = null
     if (!rulesResult.ok || !cover) return
     try {
-      const passable = new Uint8Array(water.length)
-      for (let i = 0; i < water.length; i++) passable[i] = water[i] ? 0 : 1
-      sim = createSim({ width: size, height: size, cover, passable, rules: rulesResult.rules, seed: Number(seed) || 0 })
+      sim = createSim({ width: size, height: size, cover, passable: passableFromWater(), rules: rulesResult.rules, seed: Number(seed) || 0 })
       simMapVersion = mapVersion
+      simWorldKey = worldKey
     } catch (err) {
       sim = null
       simError = err instanceof Error ? err.message : String(err)
     }
-    publish()
+    snap(false)
+    if (wasRunning && sim) play()
   }
 
   function step(n = 1): void {
@@ -75,32 +120,78 @@
       pause()
       simError = `The simulation stopped: ${err instanceof Error ? err.message : String(err)}`
     }
-    publish()
+    snap(true)
   }
 
   function play(): void {
     if (running) return
-    if (!sim || stale) reset()
+    if (!sim) reset()
     if (!sim) return
     running = true
+    lastStepAt = performance.now()
     timer = setInterval(() => step(speed), TICK_MS)
+    if (!$reducedMotion) raf = requestAnimationFrame(frame)
   }
 
   function pause(): void {
     running = false
     if (timer) clearInterval(timer)
     timer = undefined
+    if (raf) cancelAnimationFrame(raf)
+    raf = 0
+    // Settle on the latest tick so paused animals sit on their cells.
+    if (sim && nextSnap) emit(1)
   }
 
   function clearSim(): void {
     pause()
     sim = null
-    publish()
+    snap(false)
   }
+
+  // A new cover map arrived. New landscape: re-seed (same sim seed, so it is
+  // deterministic). Same landscape, edited: keep the run going on the new map
+  // (applyMapChange; docs/ecology-rules.md, "Terrain edits").
+  $effect(() => {
+    const v = mapVersion
+    const key = worldKey
+    const s = sim
+    const c = cover
+    if (!s || !c || v === simMapVersion) return
+    untrack(() => {
+      if (key !== simWorldKey) {
+        reset()
+        return
+      }
+      try {
+        applyMapChange(s, { cover: c, passable: passableFromWater() })
+        simMapVersion = v
+        snap(false)
+      } catch (err) {
+        pause()
+        simError = `The simulation could not follow the terrain change: ${err instanceof Error ? err.message : String(err)}`
+      }
+    })
+  })
+
+  // Reduced motion switched on while running: stop gliding, snap to ticks.
+  $effect(() => {
+    const reduce = $reducedMotion
+    const isRunning = running
+    untrack(() => {
+      if (reduce && raf) {
+        cancelAnimationFrame(raf)
+        raf = 0
+        emit(1)
+      } else if (!reduce && isRunning && !raf) {
+        raf = requestAnimationFrame(frame)
+      }
+    })
+  })
 
   onDestroy(() => {
     pause()
-    onpositions(null)
+    onposes(null)
   })
 
   const pct = (v: number) => `${Math.round(v * 100)}`
@@ -110,7 +201,8 @@
   <h2 id="sim-title">Herd simulation</h2>
   <p class="muted intro">
     Herbivores graze the vegetation the model predicts; predators hunt herbivores. The behaviour is hand-written rules, not
-    machine learning. Same seed and same map give the same run.
+    machine learning. Same seed and same map give the same run. A new terrain seed restarts the herds; sculpting keeps them
+    running and moves any animal caught by new water to the nearest land.
   </p>
 
   {#if !rulesResult.ok}
@@ -142,9 +234,6 @@
 
     {#if !cover}
       <p class="muted small">Waiting for a cover map from the model.</p>
-    {/if}
-    {#if stale}
-      <p class="notice warn small" role="status">The terrain changed. Press Reset to run the herds on the new map.</p>
     {/if}
     {#if simError}
       <div class="notice error" role="alert"><strong>Simulation error.</strong> {simError}</div>

@@ -86,7 +86,11 @@ pnpm typecheck
 ```
 
 `pnpm web:dev` prints a local URL. `pnpm run dev` starts the Hono Worker
-(`cf dev`), which is separate from the web app.
+(`cf dev`), which is separate from the web app. The Worker serves the
+optional saved-worlds API (save, load and share a world as a link). To use it
+locally, start both servers: `VITE_WORLDS_API=<Worker URL> pnpm web:dev`.
+Details are in [docs/worlds-api.md](docs/worlds-api.md). Everything else works
+without it.
 
 ### Run locally without the internet (fallback)
 
@@ -160,8 +164,11 @@ packages/features/        # @graze/features — shared terrain-feature contract
 packages/sim/herd/        # herd simulation + ecology.json (rules are assumptions)
 ml/                       # Node/TypeScript data pipeline, training, evaluation, export
 docs/                     # feature contract, ecology rules, model/dataset cards
-src/index.ts              # Hono Worker entrypoint (Cloudflare template)
-cloudflare.config.ts      # Worker config / bindings
+packages/worlds/          # saved-world format + validation (shared by app and Worker)
+src/index.ts              # Hono Worker: saved-worlds API (docs/worlds-api.md)
+migrations/               # D1 schema for saved worlds
+test/                     # Worker API tests (in-memory SQLite stand-in for D1)
+cloudflare.config.ts      # Worker config / bindings (D1, rate limit)
 vite.config.ts            # Vite + @cloudflare/vite-plugin
 ```
 
