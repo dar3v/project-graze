@@ -5,5 +5,5 @@
     "resolveJsonModule": true,
     "types": ["node"]
   },
-  "include": ["src", "herd"]
+  "include": ["src", "herd", "terrain"]
 }

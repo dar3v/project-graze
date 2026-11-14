@@ -32,40 +32,48 @@ You **produce** the heightmap. You **consume** the cover map, confidence array, 
 Each item is done only when every checkbox is ticked.
 
 ### D1. Terrain generator (Days 1-3)
-- [ ] `generateHeightmap(seed, options)` returns a 128×128 `Float32Array` using seeded fBm noise
-- [ ] Same seed always gives the same output (unit test)
-- [ ] Elevation is scaled into the dataset's range per the contract (unit test on min/max)
-- [ ] Options: seed, roughness, water level
+- [x] `generateHeightmap(seed, options)` returns a 128×128 `Float32Array` using seeded fBm noise
+- [x] Same seed always gives the same output (unit test)
+- [x] Elevation is scaled into the dataset's range per the contract (unit test on min/max)
+- [x] Options: seed, roughness, water level
 
 ### D2. Scene and mesh (Days 2-3)
-- [ ] Low-poly mesh with vertex colors (no voxels)
+- [x] Low-poly mesh with vertex colors (no voxels)
 - [ ] Orbit camera, water plane, seed input, water-level slider
 - [ ] Runs at 30+ fps on the team's weakest laptop
 
 ### D3. Brush (Days 4-5)
-- [ ] Raise, lower, flatten, with radius and strength controls
-- [ ] Mesh updates only the touched region
-- [ ] Emits a debounced `onHeightmapChange(dirtyRect)` event so the model re-predicts without lag
+- [x] Raise, lower, flatten, with radius and strength controls
+- [x] Mesh updates only the touched region
+- [x] Emits a debounced `onHeightmapChange(dirtyRect)` event so the model re-predicts without lag
 
 ### D4. Cell picking (Days 5-6)
-- [ ] Clicking the terrain selects a cell `(x, y)` and highlights it
+- [x] Clicking the terrain selects a cell `(x, y)` and highlights it
 - [ ] Emits the selection to Role 2's Site Probe panel
 
 ### D5. Overlays (Days 6-7)
-- [ ] Cover-type overlay using class colors read from `model_card.json`
-- [ ] Confidence overlay
-- [ ] **OOD overlay:** cells flagged as unlike the training data are visibly marked ("low trust")
-- [ ] Toggle control and a legend
+- [x] Cover-type overlay using class colors read from `model_card.json`
+- [x] Confidence overlay
+- [x] **OOD overlay:** cells flagged as unlike the training data are visibly marked ("low trust")
+- [x] Toggle control and a legend
 
 ### D6. Animals (Days 8-10)
-- [ ] Instanced meshes for one herbivore and one predator
+- [x] Instanced meshes for one herbivore and one predator
 - [ ] Positions come from Role 2's sim state; no sim logic in the renderer
 
 ### D7. Polish and robustness (Days 10-11)
-- [ ] Handles window resize
-- [ ] Friendly message if WebGL is unavailable
+- [x] Handles window resize
+- [x] Friendly message if WebGL is unavailable
 - [ ] Loading state while the model loads
 - [ ] No console errors on a fresh load
+
+Implementation notes (2026-11-14):
+- Code is in `packages/sim/terrain/` and `apps/web/src/lib/world/` (see that folder's README).
+- D2 "Orbit camera, water plane, seed input, water-level slider": the camera and water plane are done. The seed input and water slider already exist on the Sandbox page, which still shows the 2D placeholder map. They work in 3D once `WorldView` replaces `MapView` (Role 2 wiring).
+- D2 "30+ fps": not measured on the team's weakest laptop yet. Rendering is on demand and the pixel ratio is capped.
+- D4 "Emits the selection to the Site Probe", D6 "Positions come from the sim", and D7 "Loading state": `WorldView` has `onpick`, `herbivores`/`predators` and `busy` props. They take effect once the Sandbox page passes them.
+- D5 class colors come from `apps/web/src/lib/sandbox/palette.ts` by class index, because `model_card.json` has no color field.
+- D7 "No console errors on a fresh load": checked in headless Firefox on the built app with the 3D backdrop. Check again after the Sandbox wiring.
 
 ### Stretch (only if everything else is frozen by Day 10)
 Walk mode, day/night, shareable seeds through a URL parameter.

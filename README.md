@@ -13,7 +13,7 @@ Sculpt a procedurally generated valley, let a trained model predict what vegetat
 | --- | --- |
 | Repo and tooling | In progress |
 | Shared features contract (`@graze/features`) | In progress |
-| Terrain sandbox (noise terrain, water, camera) | Planned |
+| Terrain sandbox (noise terrain, water, camera) | In progress: generator, 3D view, brush, overlays and backdrop built; Sandbox page wiring pending |
 | Data pipeline (download, prepare, split) | Planned |
 | Model training and evaluation | Planned |
 | Site Probe form (input, validation, prediction) | Built; runs on a labeled stub until the model ships |
