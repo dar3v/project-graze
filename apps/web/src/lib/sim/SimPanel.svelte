@@ -6,16 +6,22 @@
     createSim,
     defaultEcology,
     interpolateSnapshot,
+    medianMovingSpeed,
     SCORE_WINDOW,
+    SimClock,
     snapshotPoses,
     stepSim,
+    TICK_MS,
+    tickGapMs,
     validateRules,
     type InterpolatedPoses,
     type SimSnapshot,
     type SimState,
   } from '../deps/herd.ts'
   import { reducedMotion } from '../state/settings.ts'
+  import { animalSpeedLabel, animalTimeScale, paceScale, type AnimalSpeed } from '../world/pace.ts'
   import EventLog from './EventLog.svelte'
+  import type { HerdSummary } from './herdSummary.ts'
   import PopulationChart from './PopulationChart.svelte'
   import RulesTable from './RulesTable.svelte'
 
@@ -38,9 +44,18 @@
      * running (interpolated between ticks), and after every change.
      */
     onposes: (p: InterpolatedPoses | null) => void
+    /**
+     * ROLE-1 D16. The "Animal speed" choice while a ground-level view is
+     * shown (walk mode, the ambient backdrop behind another page), or null
+     * for full sim speed (orbit view, and this panel on the Sandbox). It
+     * scales the sim CLOCK only: the ticks are the same, further apart.
+     */
+    animalSpeed?: AnimalSpeed | null
+    /** Herd counts, score and the clock scale, for the walk info panel and the readout. */
+    onsummary?: (s: HerdSummary | null) => void
   }
 
-  let { size, cover, water, classes, mapVersion, worldKey, onposes }: Props = $props()
+  let { size, cover, water, classes, mapVersion, worldKey, onposes, animalSpeed = null, onsummary }: Props = $props()
 
   const rulesResult = $derived(validateRules(defaultEcology, classes.length))
 
@@ -54,13 +69,31 @@
   let simMapVersion = -1
   let simWorldKey = ''
 
-  /** Sim clock: one step of `speed` ticks every TICK_MS, independent of the frame rate. */
-  const TICK_MS = 100
+  /**
+   * Sim clock (packages/sim/herd/src/clock.ts): woken every TICK_MS,
+   * independent of the frame rate. At full speed it releases `speed` ticks per
+   * wake-up, as before. In a ground-level view the rate is multiplied by
+   * `timeScale`, so the same ticks happen further apart (ROLE-1 D16).
+   */
+  const clock = new SimClock()
   let timer: ReturnType<typeof setInterval> | undefined
   let raf = 0
   let prevSnap: SimSnapshot | null = null
   let nextSnap: SimSnapshot | null = null
-  let lastStepAt = 0
+  let lastWakeAt = 0
+  let lastFrameAt = 0
+  /** How far the animals have glided from the previous batch of ticks to the latest, 0..1. */
+  let glide = 1
+
+  /** Ticks per second at full sim speed. */
+  const fullRate = $derived(speed * (1000 / TICK_MS))
+  /**
+   * The scale that brings a typical moving animal down to walking pace,
+   * computed from the rules (never hand-set): editing ecology.json keeps it right.
+   */
+  const pace = $derived(rulesResult.ok ? paceScale(medianMovingSpeed(rulesResult.rules, fullRate)) : 1)
+  const timeScale = $derived(animalSpeed ? animalTimeScale(animalSpeed, pace) : 1)
+  const rate = $derived(fullRate * timeScale)
 
   const score = $derived.by(() => {
     void version
@@ -82,16 +115,31 @@
   function snap(keepPrev: boolean): void {
     prevSnap = keepPrev ? nextSnap : null
     nextSnap = sim ? snapshotPoses(sim) : null
-    lastStepAt = performance.now()
+    glide = 0
     version++
     if (!running || $reducedMotion) emit(1)
   }
 
+  // Animals glide from one batch of ticks to the next over the time the clock
+  // takes between batches, so they stay smooth at the slowest pace (no
+  // stepping; headings turn along the shortest arc). A paused clock holds
+  // them where they are.
   function frame(now: number): void {
     raf = 0
     if (!running) return
-    emit((now - lastStepAt) / TICK_MS)
+    const gap = tickGapMs(rate)
+    if (Number.isFinite(gap)) glide = Math.min(1, glide + (now - lastFrameAt) / gap)
+    lastFrameAt = now
+    emit(glide)
     raf = requestAnimationFrame(frame)
+  }
+
+  function wake(): void {
+    const now = performance.now()
+    // A timer that fires late (a busy or background tab) does not make the sim catch up in a burst.
+    const due = clock.advance(Math.min(now - lastWakeAt, TICK_MS * 4), rate)
+    lastWakeAt = now
+    if (due > 0) step(due)
   }
 
   function reset(): void {
@@ -128,8 +176,9 @@
     if (!sim) reset()
     if (!sim) return
     running = true
-    lastStepAt = performance.now()
-    timer = setInterval(() => step(speed), TICK_MS)
+    clock.reset()
+    lastWakeAt = lastFrameAt = performance.now()
+    timer = setInterval(wake, TICK_MS)
     if (!$reducedMotion) raf = requestAnimationFrame(frame)
   }
 
@@ -184,6 +233,7 @@
         raf = 0
         emit(1)
       } else if (!reduce && isRunning && !raf) {
+        lastFrameAt = performance.now()
         raf = requestAnimationFrame(frame)
       }
     })
@@ -192,6 +242,25 @@
   onDestroy(() => {
     pause()
     onposes(null)
+    onsummary?.(null)
+  })
+
+  $effect(() => {
+    void version
+    const s = sim
+    const sc = score
+    const summary: HerdSummary | null = s
+      ? {
+          tick: s.tick,
+          herbivores: s.herbivores.length,
+          predators: s.rules.predator.enabled ? s.predators.length : null,
+          score: sc?.score ?? null,
+          provisional: sc?.provisional ?? true,
+          running,
+          timeScale,
+        }
+      : null
+    untrack(() => onsummary?.(summary))
   })
 
   const pct = (v: number) => `${Math.round(v * 100)}`
@@ -231,6 +300,14 @@
         </select>
       </label>
     </div>
+
+    {#if animalSpeed && timeScale < 1}
+      <p class="muted small pace" role="status">
+        Animal speed: <strong>{animalSpeedLabel(animalSpeed)}</strong>. A ground-level view is shown, so the sim clock runs at ×{timeScale.toFixed(3)} of
+        the speed chosen here{timeScale === 0 ? ' (paused)' : ''}. That slows the whole ecosystem, not only the walking: breeding, starvation, the chart and
+        the score all move slower per real second. The ticks themselves are unchanged. Orbit view runs at full sim speed.
+      </p>
+    {/if}
 
     {#if !cover}
       <p class="muted small">Waiting for a cover map from the model.</p>

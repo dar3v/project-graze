@@ -10,16 +10,32 @@
   //
   // Every prop after `onheightmapchange` is optional. Without it the view
   // keeps that piece of state itself, so it also works on its own.
+  //
+  // Walk mode is full viewport (D14): the viewport element leaves its box
+  // and covers the window; the page under it is left as it is. Leaving walk
+  // mode, by any path, calls `onexit` with the reason and the cell last stood
+  // on (D15), and the walker's spot and heading are kept for the next entry.
+  //
+  // This view draws while it is walked in or on screen (`viewDraws`);
+  // otherwise it stops its frame loop and frees its plants and shadow map.
+  // The page backdrop draws on every page and pauses only while this view is
+  // walked in (D19, `presence`).
   import { onDestroy, onMount, untrack } from 'svelte'
+  import { NO_VIEW, viewDraws } from './ambient.ts'
   import { CONFIDENCE_HIGH, CONFIDENCE_LOW, OOD_COLOR } from './colors.ts'
   import type { OverlayMode } from './colors.ts'
   import { formatHour, wrapHour } from './daynight.ts'
+  import { animalSpeedLabel, DEFAULT_ANIMAL_SPEED, nextAnimalSpeed } from './pace.ts'
+  import type { AnimalSpeed } from './pace.ts'
   import { classOverlay, PALETTE, toCss } from './palette.ts'
+  import { viewPresence } from './presence.ts'
   import { DEFAULT_QUALITY, lowerPreset, minPreset, TARGET_FPS } from './quality.ts'
   import type { QualityPreset } from './quality.ts'
   import { WorldRenderer, WorldUnavailableError } from './scene.ts'
   import type { ViewMode, WalkStatus, WorldStats, WorldTool } from './scene.ts'
   import type { DirtyRect } from './terrain.ts'
+  import { DEFAULT_LOOK, readCell } from './walk.ts'
+  import type { ExitReason, WalkExit } from './walk.ts'
   import WalkHud from './WalkHud.svelte'
   import type { PredictionState } from '../state/appState.ts'
 
@@ -66,6 +82,25 @@
     notice?: string
     /** Prediction state for the walk HUD. */
     prediction?: PredictionState
+
+    /**
+     * False while the page that holds this view is not the one shown (the
+     * Sandbox stays mounted behind the other pages). The view then takes no
+     * keys and does not draw.
+     */
+    shown?: boolean
+    /** Walk mode was left (button, Esc, V, pointer lock lost): the reason and the cell last stood on (D15). */
+    onexit?: (exit: WalkExit) => void
+    /** Walk-mode look settings (D15). The defaults are the behaviour before they existed. */
+    lookSensitivity?: number
+    invertLookY?: boolean
+    /** Vertical field of view in walk mode, degrees (WALK_FOV_RANGE). */
+    fov?: number
+    /** The "Animal speed" choice (D16). The page applies it to the sim clock; the view shows and cycles it (G). */
+    animalSpeed?: AnimalSpeed
+    onanimalspeedchange?: (speed: AnimalSpeed) => void
+    /** The sim time scale in effect, for the `P` readout (1 = full sim speed). */
+    animalTimeScale?: number | null
   }
 
   let {
@@ -100,9 +135,24 @@
     reducedMotion = false,
     notice = 'Predictions are for terrain-like inputs, not real ground truth.',
     prediction = 'ready',
+    shown = true,
+    onexit,
+    lookSensitivity = DEFAULT_LOOK.sensitivity,
+    invertLookY = DEFAULT_LOOK.invertY,
+    fov = DEFAULT_LOOK.fov,
+    animalSpeed = DEFAULT_ANIMAL_SPEED,
+    onanimalspeedchange,
+    animalTimeScale = null,
   }: Props = $props()
 
   let host: HTMLDivElement | undefined = $state()
+  let frame: HTMLDivElement | undefined = $state()
+  let walkButton: HTMLButtonElement | undefined = $state()
+
+  /** Put keyboard focus on the "Walk here" button (the page calls this when its walk panel closes). */
+  export function focusWalkButton(): void {
+    walkButton?.focus()
+  }
   let world: WorldRenderer | null = $state.raw(null)
   let failure: string | null = $state(null)
 
@@ -126,6 +176,54 @@
     localMode = m
     onviewmodechange?.(m)
   }
+
+  // ---- leaving walk mode (D15) ----------------------------------------------------
+
+  /** Why the walk is ending, when this view started the exit. Null: the page did (V, its view switch). */
+  let exitReason: ExitReason | null = null
+
+  /** Every exit path ends here: back to orbit view. `onexit` fires when the mode has changed. */
+  function exitWalk(reason: ExitReason): void {
+    exitReason = reason
+    setMode('orbit')
+  }
+
+  let wasWalking = false
+  $effect(() => {
+    const walkingNow = mode === 'walk'
+    untrack(() => {
+      if (wasWalking && !walkingNow) {
+        const reason = exitReason ?? 'key'
+        exitReason = null
+        onexit?.({ reason, cell: readCell(status.cellX, status.cellY, { heightmap, size, waterLevelM, classes, cover, confidence, ood }) })
+      }
+      wasWalking = walkingNow
+    })
+  })
+
+  // ---- who draws (D14) --------------------------------------------------------------
+
+  let onScreen = $state(true)
+  const presence = $derived({ shown, onScreen, walking: mode === 'walk' })
+
+  $effect(() => {
+    viewPresence.set(presence)
+  })
+
+  $effect(() => {
+    world?.setActive(viewDraws(presence))
+  })
+
+  // Walk mode covers the window: the page under it must not scroll.
+  $effect(() => {
+    if (mode !== 'walk' || !shown) return
+    const root = document.documentElement
+    const before = root.style.overflow
+    root.style.overflow = 'hidden'
+    return () => {
+      root.style.overflow = before
+    }
+  })
   function setOverlay(m: OverlayMode): void {
     localOverlay = m
     onoverlaychange?.(m)
@@ -211,7 +309,7 @@
       return
     }
     onpick(x, y)
-    if (mode === 'walk') say(`Site Probe opened for cell (${x}, ${y}), under the view.${status.look === 'locked' ? ' Press Esc to use it.' : ''}`)
+    if (mode === 'walk') say(`Site Probe opened for cell (${x}, ${y}). Exit walk mode to read it.`)
   }
 
   function photo(): void {
@@ -253,7 +351,7 @@
         reducedMotion: untrack(() => reducedMotion),
         onPick: (x, y) => probe(x, y),
         onHeightmapChange: (r) => onheightmapchange?.(r),
-        onViewModeRequest: (m) => setMode(m),
+        onViewModeRequest: (m, reason) => (m === 'orbit' ? exitWalk(reason) : setMode(m)),
         onWalkStatus: (s) => (status = s),
         onLowFps,
         onHourChange: (h) => setHour(h),
@@ -264,9 +362,18 @@
           ? 'This browser or device cannot show the 3D world (WebGL 2 is unavailable). Try another browser, or enable hardware acceleration.'
           : `The 3D world failed to start: ${err instanceof Error ? err.message : String(err)}`
     }
+    // On screen or not: decides whether this view or the page backdrop draws.
+    if (frame && typeof IntersectionObserver === 'function') {
+      const io = new IntersectionObserver((entries) => {
+        for (const e of entries) onScreen = e.isIntersecting
+      })
+      io.observe(frame)
+      return () => io.disconnect()
+    }
   })
 
   onDestroy(() => {
+    viewPresence.set(NO_VIEW)
     clearTimeout(toastTimer)
     world?.destroy() // disposes geometries, materials, textures and every listener
   })
@@ -321,6 +428,10 @@
   })
 
   $effect(() => {
+    world?.setLook({ sensitivity: lookSensitivity, invertY: invertLookY, fov })
+  })
+
+  $effect(() => {
     world?.setMode(mode)
     if (mode === 'orbit') {
       helpOpen = false
@@ -343,7 +454,7 @@
   function onkeydown(e: KeyboardEvent): void {
     const t = e.target
     if (t instanceof HTMLInputElement || t instanceof HTMLSelectElement || t instanceof HTMLTextAreaElement) return
-    if (e.ctrlKey || e.metaKey || e.altKey) return
+    if (e.ctrlKey || e.metaKey || e.altKey || !shown) return
     if (mode === 'orbit') {
       const picked = TOOLS.find((x) => x.key === e.key)
       if (picked) tool = picked.id
@@ -353,6 +464,11 @@
     if (e.code === 'KeyH') helpOpen = !helpOpen
     else if (e.code === 'KeyP') perfOpen = !perfOpen
     else if (e.code === 'KeyT') setCycle(!cycle)
+    else if (e.code === 'KeyG' && !e.repeat) {
+      const next = nextAnimalSpeed(animalSpeed)
+      onanimalspeedchange?.(next)
+      say(onanimalspeedchange ? `Animal speed: ${animalSpeedLabel(next)}` : 'Animal speed is set by the page.')
+    }
     else if (e.code === 'KeyC' && !e.repeat) photo()
     else if (e.code === 'BracketLeft') setHour(hourNow - 1)
     else if (e.code === 'BracketRight') setHour(hourNow + 1)
@@ -371,6 +487,8 @@
   {#if failure}
     <div class="notice error" role="alert">{failure}</div>
   {:else}
+    <!-- The frame keeps the view's place in the page while walk mode takes the viewport out of it. -->
+    <div class="frame" bind:this={frame}>
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div
       class="viewport"
@@ -378,7 +496,7 @@
       bind:this={host}
       {onpointerdown}
       aria-label={mode === 'walk'
-        ? '3D terrain, walk mode. W A S D to walk, mouse or arrow keys to look, E to probe the cell under you, Escape to return to orbit view.'
+        ? '3D terrain, walk mode, full screen. W A S D to walk, mouse or arrow keys to look, E to probe the cell under you, Escape or the Exit walk mode button to leave.'
         : '3D terrain. Select tool: click a cell to probe it. Brush tools: drag to sculpt. Right-drag to orbit, scroll to zoom.'}
     >
       {#if mode === 'walk' && world}
@@ -399,10 +517,12 @@
           {toast}
           {helpOpen}
           {perf}
+          animalSpeedLabel={animalSpeedLabel(animalSpeed)}
+          animalScale={animalTimeScale}
           canProbe={!!onpick}
           onmove={(s, f) => world?.setMoveInput(s, f)}
           onprobe={() => world?.probeUnderfoot()}
-          onexit={() => setMode('orbit')}
+          onexit={() => exitWalk('button')}
           onhelp={() => (helpOpen = !helpOpen)}
         />
       {:else}
@@ -410,9 +530,10 @@
           <div class="busy" aria-live="polite">{busy}</div>
         {/if}
         {#if perf}
-          <div class="orbit-perf">{perf.drawCalls} draw calls · {Math.round(perf.triangles / 1000)}k triangles · {perf.plants} plants · {perf.geometries} geometries · {perf.textures} textures · {perf.programs} programs</div>
+          <div class="orbit-perf">{perf.drawCalls} draw calls · {Math.round(perf.triangles / 1000)}k triangles · {perf.plants} plants · {perf.geometries} geometries · {perf.textures} textures · {perf.programs} programs · {perf.models}</div>
         {/if}
       {/if}
+    </div>
     </div>
 
     {#if perfNotice}
@@ -423,7 +544,7 @@
       </p>
     {/if}
 
-    <div class="toolbar">
+    <div class="toolbar" inert={mode === 'walk'}>
       <div class="tools" role="radiogroup" aria-label="Tool">
         {#each TOOLS as t (t.id)}
           <button type="button" role="radio" aria-checked={tool === t.id} class:active={tool === t.id} disabled={mode === 'walk'} onclick={() => (tool = t.id)} title="{t.label} ({t.key})">
@@ -431,7 +552,7 @@
           </button>
         {/each}
         <span class="spacer"></span>
-        <button type="button" onclick={() => setMode(mode === 'walk' ? 'orbit' : 'walk')} aria-pressed={mode === 'walk'}>
+        <button type="button" bind:this={walkButton} onclick={() => (mode === 'walk' ? exitWalk('button') : setMode('walk'))} aria-pressed={mode === 'walk'}>
           {mode === 'walk' ? 'Back to orbit' : 'Walk here'}
         </button>
         <button type="button" onclick={photo} title="Save the view as a PNG">Photo</button>
@@ -494,11 +615,16 @@
     gap: 10px;
   }
 
-  .viewport {
+  .frame {
     position: relative;
     width: 100%;
     aspect-ratio: 16 / 10;
     max-height: 70vh;
+  }
+
+  .viewport {
+    position: absolute;
+    inset: 0;
     border: 1px solid var(--border);
     background: #0d1013;
     overflow: hidden;
@@ -510,9 +636,18 @@
     height: 100%;
   }
 
-  /* Walk mode wants room: taller on phones, where 16:10 is a thin strip. */
+  /* Walk mode is full viewport (D14): the view leaves its frame and covers
+     the window, above the page and its fixed buttons. It appears at once,
+     like the backdrop's dim, which switches with no fade (D20). The camera
+     still glides (D8). */
   .viewport.walking {
-    min-height: min(70vh, 360px);
+    position: fixed;
+    inset: 0;
+    z-index: 30;
+    width: 100vw;
+    height: 100vh;
+    height: 100dvh;
+    border: 0;
   }
 
   .busy {

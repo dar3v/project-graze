@@ -43,6 +43,61 @@ test('settings: work with empty, throwing or full storage', () => {
   assert.equal(saveSettings(null, DEFAULT_SETTINGS), false)
 })
 
+test('settings (ROLE-1 D14-D16): auto-cycle is on by default; walk settings have safe defaults and ranges', () => {
+  assert.equal(DEFAULT_SETTINGS.autoCycle, true, 'day and night run behind every page by default')
+  assert.equal(DEFAULT_SETTINGS.animalSpeed, 'match')
+  assert.equal(DEFAULT_SETTINGS.lookSensitivity, 1)
+  assert.equal(DEFAULT_SETTINGS.invertLookY, false)
+  assert.equal(DEFAULT_SETTINGS.fov, 68)
+
+  // Good values are kept.
+  const kept = parseSettings({ lookSensitivity: 1.75, invertLookY: true, fov: 90, animalSpeed: 'x4', autoCycle: false })
+  assert.deepEqual([kept.lookSensitivity, kept.invertLookY, kept.fov, kept.animalSpeed, kept.autoCycle], [1.75, true, 90, 'x4', false])
+
+  // Out of range, wrong type or unknown: each field falls back on its own.
+  const bad = parseSettings({ lookSensitivity: 50, invertLookY: 'yes', fov: 179, animalSpeed: 'warp', quality: 'low' })
+  assert.deepEqual(bad, { ...DEFAULT_SETTINGS, quality: 'low' })
+  assert.deepEqual(parseSettings({ lookSensitivity: Number.NaN, fov: null, animalSpeed: 3 }), DEFAULT_SETTINGS)
+
+  // Settings saved before these fields existed still load, and get the defaults for the new ones.
+  const old = { quality: 'high', timeOfDay: 18, autoCycle: false, overlay: 'terrain', showOod: false, motion: 'reduce' }
+  assert.deepEqual(parseSettings(old), { ...DEFAULT_SETTINGS, ...old })
+})
+
+test('settings (ROLE-1 D14-D16): the new fields survive empty, corrupt, blocked and full storage', () => {
+  const mem = new Map<string, string>()
+  const ok = { getItem: (k: string) => mem.get(k) ?? null, setItem: (k: string, v: string) => void mem.set(k, v) }
+  const mine = { ...DEFAULT_SETTINGS, animalSpeed: 'paused' as const, fov: 75, invertLookY: true, lookSensitivity: 0.5 }
+  assert.equal(saveSettings(ok, mine), true)
+  assert.deepEqual(loadSettings(ok), mine, 'remembered')
+
+  mem.set(SETTINGS_STORAGE_KEY, '{"animalSpeed":')
+  assert.deepEqual(loadSettings(ok), DEFAULT_SETTINGS, 'corrupt JSON')
+  mem.set(SETTINGS_STORAGE_KEY, '[1,2,3]')
+  assert.deepEqual(loadSettings(ok), DEFAULT_SETTINGS, 'valid JSON of the wrong shape')
+
+  const full = {
+    getItem: (k: string) => mem.get(k) ?? null,
+    setItem: () => {
+      throw new Error('QuotaExceededError')
+    },
+  }
+  mem.clear()
+  assert.equal(saveSettings(full, mine), false, 'full storage: not saved, no throw')
+  assert.deepEqual(loadSettings(full), DEFAULT_SETTINGS, 'and the app still starts on the defaults')
+
+  const blocked = {
+    getItem: () => {
+      throw new Error('SecurityError')
+    },
+    setItem: () => {
+      throw new Error('SecurityError')
+    },
+  }
+  assert.deepEqual(loadSettings(blocked), DEFAULT_SETTINGS)
+  assert.equal(saveSettings(blocked, mine), false)
+})
+
 test('settings: reduced motion follows the system only when set to "system"', () => {
   assert.equal(resolveReducedMotion('system', true), true)
   assert.equal(resolveReducedMotion('system', false), false)

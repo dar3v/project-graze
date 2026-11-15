@@ -38,6 +38,90 @@ export const WADE_SPEED_FACTOR = 0.45
 /** The walker stays this many cells inside the outermost cell centers (the map edge). */
 export const EDGE_MARGIN = 0.25
 
+/** Mouse look settings (D15). The defaults reproduce the behaviour before they existed. */
+export interface LookSettings {
+  /** Multiplier on mouse and drag look speed. 1 is the default. */
+  readonly sensitivity: number
+  /** Moving the mouse up looks down. */
+  readonly invertY: boolean
+  /** Vertical field of view in walk mode, degrees. */
+  readonly fov: number
+}
+
+/** Field of view in walk mode: the default and the range the setting allows. */
+export const WALK_FOV_DEFAULT = 68
+/**
+ * 50 is a narrow, calm view that still shows the ground ahead; 100 is as wide
+ * as the low-poly trees stay undistorted at the screen edge. Below 50 the
+ * diorama reads as a telephoto shot; above 100 the horizon bends.
+ */
+export const WALK_FOV_RANGE = { min: 50, max: 100 } as const
+/** Look sensitivity range the setting allows. */
+export const LOOK_SENSITIVITY_RANGE = { min: 0.25, max: 3 } as const
+export const DEFAULT_LOOK: LookSettings = { sensitivity: 1, invertY: false, fov: WALK_FOV_DEFAULT }
+
+/**
+ * Why walk mode was left (D15). Every path does the same thing; the reason
+ * is for the page.
+ *  - `button`: the "Exit walk mode" button in the HUD;
+ *  - `escape`: Esc, with or without the pointer locked;
+ *  - `key`: V, or the page's own view switch;
+ *  - `lock-lost`: the browser took the pointer lock away (the window lost
+ *    focus, another app came forward).
+ */
+export type ExitReason = 'button' | 'escape' | 'key' | 'lock-lost'
+
+/** What the model says about one cell, as the walk HUD and the exit panel show it. */
+export interface CellReading {
+  readonly x: number
+  readonly y: number
+  /** Under the water level: no prediction is shown for water. */
+  readonly water: boolean
+  /** Predicted class index and name, or null (water, or no cover map yet). */
+  readonly classIndex: number | null
+  readonly className: string | null
+  /** 0..1, or null when there is none. */
+  readonly confidence: number | null
+  /** The cell is unlike the training data (out of distribution). */
+  readonly lowTrust: boolean
+}
+
+/** What `onexit` hands the page: why the walk ended, and the cell last stood on. */
+export interface WalkExit {
+  readonly reason: ExitReason
+  readonly cell: CellReading
+}
+
+export interface CellArrays {
+  readonly heightmap: Float32Array
+  readonly size: number
+  readonly waterLevelM: number
+  readonly classes: readonly string[]
+  readonly cover: Uint8Array | null
+  readonly confidence: Float32Array | null
+  readonly ood: Uint8Array | null
+}
+
+/** Read one cell from the live arrays. Arrays of the wrong length (a map being replaced) read as "no prediction". */
+export function readCell(x: number, y: number, a: CellArrays): CellReading {
+  const cx = Math.min(a.size - 1, Math.max(0, Math.round(x)))
+  const cy = Math.min(a.size - 1, Math.max(0, Math.round(y)))
+  const i = cy * a.size + cx
+  const n = a.size * a.size
+  const water = a.heightmap[i] < a.waterLevelM
+  const has = !!a.cover && a.cover.length === n && !water
+  const classIndex = has ? a.cover![i] : null
+  return {
+    x: cx,
+    y: cy,
+    water,
+    classIndex,
+    className: classIndex === null ? null : (a.classes[classIndex] ?? `Class ${classIndex}`),
+    confidence: has && a.confidence && a.confidence.length === n ? a.confidence[i] : null,
+    lowTrust: has && !!a.ood && a.ood.length === n && a.ood[i] === 1,
+  }
+}
+
 export interface WalkTerrain {
   /** Contract heightmap: meters, row-major, `index = y * size + x`. */
   readonly heightmap: Float32Array
@@ -191,6 +275,25 @@ export function findSpawn(wantX: number, wantZ: number, t: WalkTerrain): { x: nu
   }
   const i = best >= 0 ? best : shallowest
   return { x: (i % t.size) - half, z: Math.floor(i / t.size) - half }
+}
+
+/**
+ * Keep the walker where they were if that is still a place to stand, else
+ * move them to the nearest dry cell (D15). Used after a re-seed, a terrain
+ * edit under the walker, or a water-level change:
+ *
+ * - a point outside the map is pulled back inside the edge margin;
+ * - a point on dry land, or in water shallow enough to wade, is kept;
+ * - a point in water deeper than `WADE_DEPTH_M` moves to the nearest dry cell
+ *   center (`findSpawn`), so the walker never starts in deep water.
+ */
+export function settleWalker(x: number, z: number, t: WalkTerrain): { x: number; z: number; moved: boolean } {
+  const bound = walkBound(t.size)
+  const cx = Number.isFinite(x) ? clamp(x, -bound, bound) : 0
+  const cz = Number.isFinite(z) ? clamp(z, -bound, bound) : 0
+  if (waterDepth(cx, cz, t) <= WADE_DEPTH_M) return { x: cx, z: cz, moved: cx !== x || cz !== z }
+  const dry = findSpawn(cx, cz, t)
+  return { x: clamp(dry.x, -bound, bound), z: clamp(dry.z, -bound, bound), moved: true }
 }
 
 /** Compass bearing in degrees (0 = north = -Z, 90 = east = +X) for a camera yaw. */

@@ -4,7 +4,10 @@
  *
  * - slope blending: moderate slopes turn to dirt, steep ones to rock;
  * - shoreline: a sand band just above the water, darker wet ground below it;
- * - a little per-fragment noise so a 30 m triangle is not one flat color.
+ * - a little per-fragment noise so a 30 m triangle is not one flat color;
+ * - a ground detail texture (D18): a small tiling grain, generated here in
+ *   code (`groundDetailTexture`, no image file), which gives the ground under
+ *   the walker something to read at eye level.
  *
  * The patch is scaled by `uNatural`. It is 1 in the natural view and 0 while
  * a data overlay (cover, confidence) is shown, so overlay colors stay exactly
@@ -33,8 +36,67 @@ export interface TerrainUniforms {
   uWaterY: { value: number }
 }
 
-export function createTerrainMaterial(): { material: THREE.MeshLambertMaterial; uniforms: TerrainUniforms } {
+/** Side of the ground detail texture, pixels. */
+export const DETAIL_SIZE = 64
+/** The texture repeats every this many world units (cells). */
+export const DETAIL_TILE = 1.6
+/** The grain darkens or lightens the ground by at most this share. */
+export const DETAIL_STRENGTH = 0.16
+
+/**
+ * Tiling greyscale grain, 0..255, row-major. Two octaves of value noise on a
+ * lattice that wraps at the edges, so the texture repeats without a seam.
+ * Three-free, deterministic, unit-tested.
+ */
+export function groundDetailPixels(size: number = DETAIL_SIZE): Uint8Array {
+  const hash = (x: number, y: number, period: number): number => {
+    const px = ((x % period) + period) % period
+    const py = ((y % period) + period) % period
+    let h = Math.imul(px + 1, 0x27d4eb2d) ^ Math.imul(py + 1, 0x165667b1)
+    h = Math.imul(h ^ (h >>> 15), 0x85ebca6b)
+    h ^= h >>> 13
+    return (h >>> 0) / 4294967296
+  }
+  const octave = (u: number, v: number, period: number): number => {
+    const x = u * period
+    const y = v * period
+    const xi = Math.floor(x)
+    const yi = Math.floor(y)
+    const fx = x - xi
+    const fy = y - yi
+    const sx = fx * fx * (3 - 2 * fx)
+    const sy = fy * fy * (3 - 2 * fy)
+    const top = hash(xi, yi, period) * (1 - sx) + hash(xi + 1, yi, period) * sx
+    const bottom = hash(xi, yi + 1, period) * (1 - sx) + hash(xi + 1, yi + 1, period) * sx
+    return top * (1 - sy) + bottom * sy
+  }
+  const out = new Uint8Array(size * size)
+  for (let y = 0; y < size; y++)
+    for (let x = 0; x < size; x++) {
+      const u = x / size
+      const v = y / size
+      out[y * size + x] = Math.round((octave(u, v, 8) * 0.6 + octave(u, v, 24) * 0.4) * 255)
+    }
+  return out
+}
+
+function groundDetailTexture(): THREE.DataTexture {
+  const t = new THREE.DataTexture(groundDetailPixels(), DETAIL_SIZE, DETAIL_SIZE, THREE.RedFormat, THREE.UnsignedByteType)
+  t.wrapS = THREE.RepeatWrapping
+  t.wrapT = THREE.RepeatWrapping
+  t.magFilter = THREE.LinearFilter
+  t.minFilter = THREE.LinearMipmapLinearFilter
+  t.generateMipmaps = true
+  t.needsUpdate = true
+  return t
+}
+
+export function createTerrainMaterial(): { material: THREE.MeshLambertMaterial; uniforms: TerrainUniforms; dispose: () => void } {
+  const detail = groundDetailTexture()
   const uniforms = {
+    uDetail: { value: detail },
+    uDetailScale: { value: 1 / DETAIL_TILE },
+    uDetailStrength: { value: DETAIL_STRENGTH },
     uNatural: { value: 1 },
     uWaterY: { value: -1e6 },
     uExaggeration: { value: VERTICAL_EXAGGERATION },
@@ -66,6 +128,9 @@ uniform vec3 uDirt;
 uniform vec3 uSand;
 uniform vec3 uBed;
 uniform vec4 uSlopes;
+uniform sampler2D uDetail;
+uniform float uDetailScale;
+uniform float uDetailStrength;
 float grazeHash(vec2 p) {
   p = fract(p * vec2(123.34, 456.21));
   p += dot(p, p + 45.32);
@@ -97,10 +162,19 @@ if (uNatural > 0.0) {
     c = mix(uSand * 0.75, uBed, smoothstep(0.0, 0.5, -above));
   }
   c *= 0.9 + 0.2 * n;
+  // Ground grain. Inside the natural branch only: overlay colors stay exact.
+  c *= 1.0 + (texture2D(uDetail, vGrazeWorld.xz * uDetailScale).r - 0.5) * 2.0 * uDetailStrength;
   diffuseColor.rgb = mix(diffuseColor.rgb, c, uNatural * vGrazeBlend);
 }`,
       )
   }
   material.customProgramCacheKey = () => 'graze-terrain'
-  return { material, uniforms }
+  return {
+    material,
+    uniforms,
+    dispose: () => {
+      material.dispose()
+      detail.dispose()
+    },
+  }
 }

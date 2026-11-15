@@ -8,15 +8,20 @@
  * cover map always give the same forest, and editing one cell never moves
  * the plants in another.
  *
+ * Trees grow in small forest patches with open plains between them (D21). A
+ * seeded low-frequency noise field decides WHERE trees grow; the cover class
+ * still decides WHAT grows, so the plants keep showing the predicted class.
+ * Shrubs (Krummholz) are not patchy: they keep their own density.
+ *
  * Low-trust (OOD) cells are drawn differently on purpose: fewer plants,
  * smaller, and pulled toward grey. A prediction the model is unsure about
  * then looks thin and washed out in the world itself, not only in the
- * overlay.
+ * overlay. This applies on top of the patch density.
  */
 
 import { desaturate, mix, PALETTE, toLinear } from './palette.ts'
 import type { Rgb } from './palette.ts'
-import { hash2 } from './terrain.ts'
+import { hash2, valueNoise } from './terrain.ts'
 
 /** Vegetation is split into square chunks of this many cells, so distant chunks can be dropped (D9 culling). */
 export const CHUNK_CELLS = 16
@@ -33,6 +38,8 @@ export interface Species {
   readonly perCell: number
   readonly minScale: number
   readonly maxScale: number
+  /** True for trees: they grow in forest patches (D21). Shrubs keep their own density everywhere. */
+  readonly patchy: boolean
 }
 
 /**
@@ -41,14 +48,89 @@ export interface Species {
  * `PALETTE.vegetation.classTints[i]`.
  */
 export const SPECIES: readonly Species[] = [
-  { silhouette: 'spire', perCell: 1.5, minScale: 0.8, maxScale: 1.25 }, // 0 Spruce/Fir: narrow stacked cones
-  { silhouette: 'pole', perCell: 1.7, minScale: 0.8, maxScale: 1.2 }, // 1 Lodgepole Pine: tall bare trunk, small high crown
-  { silhouette: 'broadPine', perCell: 0.8, minScale: 0.85, maxScale: 1.3 }, // 2 Ponderosa Pine: sturdy, open crown
-  { silhouette: 'roundCrown', perCell: 0.7, minScale: 0.8, maxScale: 1.3 }, // 3 Cottonwood/Willow: wide round crown
-  { silhouette: 'slender', perCell: 1.4, minScale: 0.75, maxScale: 1.15 }, // 4 Aspen: pale trunk, small oval crown
-  { silhouette: 'fullCone', perCell: 1.1, minScale: 0.85, maxScale: 1.35 }, // 5 Douglas-fir: big full cone
-  { silhouette: 'shrub', perCell: 2.2, minScale: 0.7, maxScale: 1.3 }, // 6 Krummholz: low stunted clumps
+  { silhouette: 'spire', perCell: 1.5, minScale: 0.8, maxScale: 1.25, patchy: true }, // 0 Spruce/Fir: narrow stacked cones
+  { silhouette: 'pole', perCell: 1.7, minScale: 0.8, maxScale: 1.2, patchy: true }, // 1 Lodgepole Pine: tall bare trunk, small high crown
+  { silhouette: 'broadPine', perCell: 0.8, minScale: 0.85, maxScale: 1.3, patchy: true }, // 2 Ponderosa Pine: sturdy, open crown
+  { silhouette: 'roundCrown', perCell: 0.7, minScale: 0.8, maxScale: 1.3, patchy: true }, // 3 Cottonwood/Willow: wide round crown
+  { silhouette: 'slender', perCell: 1.4, minScale: 0.75, maxScale: 1.15, patchy: true }, // 4 Aspen: pale trunk, small oval crown
+  { silhouette: 'fullCone', perCell: 1.1, minScale: 0.85, maxScale: 1.35, patchy: true }, // 5 Douglas-fir: big full cone
+  { silhouette: 'shrub', perCell: 2.2, minScale: 0.7, maxScale: 1.3, patchy: false }, // 6 Krummholz: low stunted clumps
 ]
+
+// ---- Forest patches (D21) ---------------------------------------------------------
+
+/*
+ * The patch field is cellular noise: the map is cut into a lattice of
+ * PATCH_SCALE-cell squares (turned by PATCH_ANGLE, so nothing lines up with
+ * the map's rows), and each square is one candidate site. A seeded draw
+ * decides whether the site holds a patch, where in the square its centre
+ * sits, and its radius. A little value noise roughens the rim, so patches
+ * are blobs, not discs. Unlike plain value noise this keeps every patch
+ * inside the wanted size: thresholded value noise gave 2-cell specks next to
+ * 25-cell merged blobs.
+ */
+
+/**
+ * Lattice spacing of the patch sites, in cells: one candidate patch per
+ * PATCH_SCALE x PATCH_SCALE square. The terrain's first octave is 40 cells,
+ * so the patches do not follow the hills.
+ */
+export const PATCH_SCALE = 16
+/** A site holds a patch when its seeded draw (0..1) is at or above this; below it, the square stays plains. */
+export const PATCH_THRESHOLD = 0.35
+/** Patch radius range, cells: patches are 6-15 cells (180-450 m) across. */
+export const PATCH_RADIUS_MIN = 3
+export const PATCH_RADIUS_MAX = 7.5
+/** Tree density on the plains, as a share of the species' full density. Near zero: a lone tree now and then. */
+export const PLAINS_DENSITY = 0.02
+/** Tree density inside a patch, as a share of the species' full density. Dense on purpose. */
+export const PATCH_DENSITY = 1.6
+/** The patch field is turned by this angle (radians). */
+const PATCH_ANGLE = 0.61
+/** The forest thins out over this many cells inside the rim. */
+const PATCH_EDGE_CELLS = 1.5
+/** The rim wobbles by up to this share of the radius, in and out. */
+const PATCH_WOBBLE = 0.22
+/** Patch centres keep this far from their square's sides, cells, so two neighbours rarely merge into one big blob. */
+const PATCH_INSET = 2.5
+
+/**
+ * How much forest a cell is in, 0 (plains) to 1 (inside a patch). Independent
+ * of the cover class and the quality preset: the same seed always gives the
+ * same patches on every preset.
+ */
+export function patchWeight(seed: number, x: number, y: number): number {
+  const s0 = (seed ^ SALT.patch) | 0
+  const c = Math.cos(PATCH_ANGLE)
+  const s = Math.sin(PATCH_ANGLE)
+  // Into the turned lattice, in units of one square.
+  const u = (x * c - y * s) / PATCH_SCALE
+  const v = (x * s + y * c) / PATCH_SCALE
+  const iu = Math.floor(u)
+  const iv = Math.floor(v)
+  const wobble = 1 + PATCH_WOBBLE * (2 * valueNoise(s0 ^ 0x2f6b, x / 3.5, y / 3.5) - 1)
+  const inset = PATCH_INSET / PATCH_SCALE
+  let best = 0
+  for (let dv = -1; dv <= 1; dv++) {
+    for (let du = -1; du <= 1; du++) {
+      const su = iu + du
+      const sv = iv + dv
+      if (hash2(s0, su, sv) < PATCH_THRESHOLD) continue
+      const cu = su + inset + (1 - 2 * inset) * hash2(s0 ^ 0x51a7, su, sv)
+      const cv = sv + inset + (1 - 2 * inset) * hash2(s0 ^ 0x3c9e, su, sv)
+      const radius = PATCH_RADIUS_MIN + (PATCH_RADIUS_MAX - PATCH_RADIUS_MIN) * hash2(s0 ^ 0x7e11, su, sv)
+      const d = (Math.hypot(u - cu, v - cv) * PATCH_SCALE) / wobble
+      const t = Math.min(1, Math.max(0, (radius - d) / PATCH_EDGE_CELLS))
+      if (t > best) best = t
+    }
+  }
+  return best * best * (3 - 2 * best)
+}
+
+/** Tree density multiplier for a cell: `PLAINS_DENSITY` on the plains, `PATCH_DENSITY` inside a patch. */
+export function patchDensity(seed: number, x: number, y: number): number {
+  return PLAINS_DENSITY + (PATCH_DENSITY - PLAINS_DENSITY) * patchWeight(seed, x, y)
+}
 
 /** Low-trust (OOD) cells keep this share of their plants. */
 export const OOD_DENSITY = 0.35
@@ -86,7 +168,7 @@ export interface PlantBatch {
 }
 
 /** Independent random streams per purpose, so adding one never shifts another. */
-const SALT = { count: 0x51ed270b, x: 0x2545f491, y: 0x68e31da4, scale: 0x1b873593, rot: 0x7ed55d16, tint: 0x3c6ef372, ood: 0x5bd1e995, grass: 0x27d4eb2f }
+const SALT = { count: 0x51ed270b, x: 0x2545f491, y: 0x68e31da4, scale: 0x1b873593, rot: 0x7ed55d16, tint: 0x3c6ef372, ood: 0x5bd1e995, grass: 0x27d4eb2f, patch: 0x165667b1 }
 
 /** Seeded random number in [0, 1) for cell (x, y), plant k, stream `salt`. */
 function rand(seed: number, salt: number, x: number, y: number, k: number): number {
@@ -139,7 +221,9 @@ export function placeVegetation(v: VegetationInput): PlantBatch[] {
       const classIndex = v.cover[i] % SPECIES.length
       const sp = SPECIES[classIndex]
       const lowTrust = !!ood && ood[i] === 1
-      const expected = sp.perCell * density * keep * (lowTrust ? OOD_DENSITY : 1)
+      // Where (D21), then how trusted: the OOD share applies on top of the patch density.
+      const patch = sp.patchy ? patchDensity(v.seed, x, y) : 1
+      const expected = sp.perCell * density * keep * patch * (lowTrust ? OOD_DENSITY : 1)
       const count = Math.floor(expected) + (rand(v.seed, SALT.count, x, y, 0) < expected % 1 ? 1 : 0)
       if (count === 0) continue
       const key = (Math.floor(y / CHUNK_CELLS) * chunks + Math.floor(x / CHUNK_CELLS)) * SPECIES.length + classIndex

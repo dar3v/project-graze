@@ -136,7 +136,17 @@ here ever does), so the time slider cannot change a prediction.
   touched rows of the position and color buffers and never recomputes normals.
 - **Render on demand in orbit view.** Frames are drawn only after a change or
   while the camera moves. Walk mode and the day/night cycle draw every frame,
-  and the frame-rate guard watches them. The backdrop auto-rotates unless the
-  user has `prefers-reduced-motion` set; it has no sky, plants or shadows.
+  and the frame-rate guard watches them.
+- **The backdrop** (`backdrop.ts`, `ambient.ts`) draws the walk look (sky,
+  fog, water, plants, animals) from a seeded vantage at the `low` preset, at
+  most 30 frames a second. Its camera turns without end at 2.5° a second
+  (D19) on every page, the Sandbox included; it pauses only in walk mode, in
+  a hidden tab, or when its frame-rate guard freezes it. With
+  `prefers-reduced-motion` it holds still. Over it lies one flat black dim,
+  `DIM_IDLE` 0.84, with no fade or gradient (D20).
+- **Trees grow in small forest patches** (`vegetation.ts`, D21): a seeded
+  cellular field picks where, the cover class picks which silhouette.
+  Shrubs (Krummholz) and grass are not patchy. About a third of the plants of
+  a uniformly planted map, with open plains between the patches.
 - **WebGL 2 is required** (three r163+). Without it, `WorldView` shows a
   message and the backdrop stays black.

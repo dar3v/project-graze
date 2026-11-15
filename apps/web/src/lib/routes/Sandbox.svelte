@@ -8,17 +8,32 @@
   import { inputSpec } from '../model/modelCard.ts'
   import SiteProbe from '../probe/SiteProbe.svelte'
   import { classColor } from '../sandbox/palette.ts'
+  import WalkPanel from '../sandbox/WalkPanel.svelte'
   import { fetchWorld, modelMismatchNotice, parseWorldHash, saveWorld, worldShareHash, type SavedWorld } from '../sandbox/worldIo.ts'
   import SettingsPanel from '../settings/SettingsPanel.svelte'
   import { reducedMotion, settings } from '../state/settings.ts'
+  import type { HerdSummary } from '../sim/herdSummary.ts'
   import SimPanel from '../sim/SimPanel.svelte'
+  import { liveWorld, livePoses } from '../state/liveWorld.ts'
   import { helpOpen, isTypingTarget } from '../help/help.ts'
   import { probeOpen, selectCell, selectedCell, terrainVersion, viewMode, worldConfig, worldKeyOf, type ViewMode } from '../state/appState.ts'
   import { openSavedWorld, terrainFor, toSavedWorld } from '../state/worldTerrain.ts'
   import { PREDICTION_NOTICE, WORLD_FEATURES } from '../state/worldFeatures.ts'
   import { CELL_SIZE_M, COVERTYPE_ELEVATION, GRID, reliefBand, waterLevelForShare } from '../world/terrain.ts'
   import { exportShareCode, importWorld, readWorldInput } from '../world/share.ts'
+  import type { WalkExit } from '../world/walk.ts'
   import WorldView from '../world/WorldView.svelte'
+
+  interface Props {
+    /**
+     * False while another page is shown. The Sandbox stays mounted then
+     * (App.svelte), so the predictions and the herds keep running behind the
+     * other pages and the world is still there on return (ROLE-1 D14).
+     */
+    active?: boolean
+  }
+
+  let { active = true }: Props = $props()
 
   const DEBOUNCE_MS = 250
 
@@ -59,7 +74,30 @@
   // Poses keep their heading ([x, y, heading, ...]), so the animals face the way they move.
   let poses: InterpolatedPoses | null = $state.raw(null)
 
+  // The page background draws this same world (ROLE-1 D14). The heightmap is
+  // edited in place, so `terrainRev` tells it when to look again.
+  let terrainRev = $state(0)
+  $effect(() => {
+    liveWorld.set({
+      heightmap: heightM,
+      size: GRID,
+      cellSizeM: CELL_SIZE_M,
+      waterLevelM: waterLevel,
+      elevation: { min: entry.elevation.min, max: entry.elevation.max },
+      seed: $worldConfig.seed,
+      cover: map?.cover ?? null,
+      ood: map?.ood ?? null,
+      terrainRev,
+    })
+  })
+
+  function onPoses(p: InterpolatedPoses | null): void {
+    poses = p
+    livePoses.set(p ? { herbivores: p.herbivores, predators: p.predators, stride: POSE_STRIDE } : null)
+  }
+
   function onHeightmapChange(): void {
+    terrainRev++
     refreshCells()
     // Refresh an open probe so it shows the sculpted cell, not stale values.
     const sel = $selectedCell
@@ -114,13 +152,56 @@
 
   function setMode(m: ViewMode): void {
     if (m === 'walk' && !WORLD_FEATURES.walkMode) return
+    if (m === 'walk') walkExit = null
     viewMode.set(m)
   }
 
   function onkeydown(e: KeyboardEvent): void {
+    // Not while another page is shown, and not under the walk panel (a dialog).
+    if (!active || walkExit) return
     if (isTypingTarget(e.target) || e.ctrlKey || e.metaKey || e.altKey || $helpOpen) return
     if (e.key === 'v' || e.key === 'V') setMode($viewMode === 'orbit' ? 'walk' : 'orbit')
   }
+
+  // Leaving the page (browser Back while walking) leaves walk mode too.
+  $effect(() => {
+    if (!active && $viewMode === 'walk') viewMode.set('orbit')
+  })
+
+  // ---- leaving walk mode: the info and settings panel (ROLE-1 D15) --------
+
+  let worldView: ReturnType<typeof WorldView> | undefined = $state()
+  /** Set when walk mode was left: why, and the cell last stood on. The panel is open while it is set. */
+  let walkExit: WalkExit | null = $state.raw(null)
+  let herd: HerdSummary | null = $state.raw(null)
+
+  function onWalkExit(exit: WalkExit): void {
+    // Only when this page is the one shown: leaving by navigating away opens nothing.
+    if (active) walkExit = exit
+  }
+
+  function closeWalkPanel(): void {
+    walkExit = null
+    // Focus goes back to where walk mode is entered from.
+    queueMicrotask(() => worldView?.focusWalkButton())
+  }
+
+  function resumeWalk(): void {
+    walkExit = null
+    setMode('walk')
+  }
+
+  // A link in the panel (Model Report, Responsible Use) leaves the page: close the panel, keep the world.
+  $effect(() => {
+    if (!active) walkExit = null
+  })
+
+  // ---- animal pace (ROLE-1 D16) ---------------------------------------------
+
+  // Ground-level views (walk mode, and the ambient backdrop behind another
+  // page) show the herds at walking pace. Orbit view, and this page's herd
+  // panel, run at full sim speed: the pace follows the view mode.
+  const groundLevel = $derived($viewMode === 'walk' || !active)
 
   // ---- terrain controls (write the shared store) -------------------------
 
@@ -252,6 +333,8 @@
 <svelte:window {onkeydown} />
 
 <section class="section" aria-labelledby="sandbox-title">
+  <!-- Walk mode covers the window: what it covers is inert, so Tab cannot reach it. -->
+  <div class="covered" inert={$viewMode === 'walk'}>
   <h2 id="sandbox-title" class="visually-hidden">Sandbox</h2>
 
   {#if $modelStatus.state === 'error'}
@@ -287,7 +370,7 @@
 
   <p class="hint muted">
     {#if $viewMode === 'walk'}
-      Walk the valley you sculpted. The plants are the model's predicted cover type; sparse, grey plants mark low trust. Press E to probe the cell under you, Esc to go back.
+      Walk the valley you sculpted. The plants are the model's predicted cover type; sparse, grey plants mark low trust. Press E to probe the cell under you, Esc to exit.
     {:else}
       Select a cell to probe it. Raise, lower or flatten the ground and the cover map is predicted again in your browser. Right-drag to orbit, scroll to zoom.
     {/if}
@@ -296,9 +379,19 @@
   {#if worldNotice}
     <p class="notice warn" role="status">{worldNotice} <button type="button" class="link" onclick={() => (worldNotice = null)}>Dismiss</button></p>
   {/if}
+  </div>
 
   <div class="map">
     <WorldView
+      bind:this={worldView}
+      shown={active}
+      onexit={onWalkExit}
+      lookSensitivity={$settings.lookSensitivity}
+      invertLookY={$settings.invertLookY}
+      fov={$settings.fov}
+      animalSpeed={$settings.animalSpeed}
+      onanimalspeedchange={(a) => settings.update((v) => ({ ...v, animalSpeed: a }))}
+      animalTimeScale={herd?.timeScale ?? null}
       heightmap={heightM}
       size={GRID}
       cellSizeM={CELL_SIZE_M}
@@ -333,6 +426,19 @@
     />
   </div>
 
+  {#if walkExit}
+    <WalkPanel
+      exit={walkExit}
+      {herd}
+      animalSpeed={$settings.animalSpeed}
+      cellSizeM={CELL_SIZE_M}
+      canResume={WORLD_FEATURES.walkMode}
+      onresume={resumeWalk}
+      onclose={closeWalkPanel}
+    />
+  {/if}
+
+  <div class="covered" inert={$viewMode === 'walk'}>
   <p class="world-notice">{PREDICTION_NOTICE}</p>
 
   <p class="status muted" aria-live="polite">
@@ -438,9 +544,12 @@
       classes={card.classes}
       mapVersion={map?.version ?? 0}
       worldKey={map?.worldKey ?? ''}
-      onposes={(p) => (poses = p)}
+      onposes={onPoses}
+      animalSpeed={groundLevel ? $settings.animalSpeed : null}
+      onsummary={(h) => (herd = h)}
     />
   {/if}
+  </div>
 </section>
 
 <style>

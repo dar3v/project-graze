@@ -40,8 +40,11 @@
         ['E', 'Open the Site Probe for the cell under your feet'],
         ['[ and ]', 'Earlier / later time of day (lighting only)'],
         ['T', 'Day/night cycle on or off'],
+        ['G', 'Animal speed: match walker, 2×, 4×, full sim speed, paused'],
         ['H', 'Show the walk controls inside the view'],
-        ['Esc', 'Release the pointer and go back to orbit view'],
+        ['P', 'Frame rate, draw counts, animal speed and custom models'],
+        ['Esc or V', 'Exit walk mode (also the Exit walk mode button). The walk info and settings panel opens'],
+        ['Resume walking', 'In that panel: return to the same spot, facing the same way'],
       ],
     },
   ]
