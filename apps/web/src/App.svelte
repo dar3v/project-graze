@@ -36,7 +36,6 @@
     {#snippet header()}
       <header>
         <div class="badges">
-          <button type="button" class="btn" onclick={() => helpOpen.set(true)} title="Controls help (?)" aria-haspopup="dialog">? help</button>
           <a class="btn" href="#/report" title="Model status. Opens the Model Report.">{statusLabel}</a>
         </div>
         <p class="label eyebrow">CSST 102 · terrain-to-habitat classifier</p>

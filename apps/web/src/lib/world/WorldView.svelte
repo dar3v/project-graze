@@ -574,17 +574,21 @@
         </select>
       </label>
       <label>
-        <span class="label">Time of day · {formatHour(hour)} · lighting only</span>
+        <span class="label">Time · {formatHour(hour)}</span>
         <input type="range" min="0" max="24" step="0.25" value={hour} oninput={(e) => setHour(Number(e.currentTarget.value))} />
       </label>
-      <label class="check">
-        <input type="checkbox" checked={cycle} onchange={(e) => setCycle(e.currentTarget.checked)} />
-        <span>Day/night cycle</span>
-      </label>
-      <label class="check" class:dimmed={mode === 'walk'}>
-        <input type="checkbox" checked={oodMarks} onchange={(e) => setShowOod(e.currentTarget.checked)} disabled={mode === 'walk'} />
-        <span>Mark low-trust cells</span>
-      </label>
+      <div class="checks">
+        <!-- empty label line so the boxes start at control height, not label height -->
+        <span class="label" aria-hidden="true">&nbsp;</span>
+        <label class="check">
+          <input type="checkbox" checked={cycle} onchange={(e) => setCycle(e.currentTarget.checked)} />
+          <span>Day/night cycle</span>
+        </label>
+        <label class="check" class:dimmed={mode === 'walk'}>
+          <input type="checkbox" checked={oodMarks} onchange={(e) => setShowOod(e.currentTarget.checked)} disabled={mode === 'walk'} />
+          <span>Mark low-trust cells</span>
+        </label>
+      </div>
     </div>
 
     <ul class="legend" aria-label="Legend">
@@ -698,12 +702,21 @@
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
     gap: 12px;
-    align-items: end;
+    /* top-align so labels share one line even though the select is taller than the sliders */
+    align-items: start;
   }
 
   .toolbar label {
     display: grid;
     gap: 6px;
+    min-width: 0;
+  }
+
+  /* one-line labels keep every control in the row at the same height */
+  .toolbar .label {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .tools {
@@ -726,12 +739,25 @@
     opacity: 0.45;
   }
 
+  /* two boxes side by side need about two control columns of width */
+  .checks {
+    grid-column: span 2;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 16px;
+  }
+
+  .checks > .label {
+    flex-basis: 100%;
+  }
+
   .check {
     display: flex !important;
     align-items: center;
     gap: 8px;
-    font-size: 12px;
+    font-size: 11px;
     color: var(--text-2);
+    white-space: nowrap;
   }
 
   .check input {
