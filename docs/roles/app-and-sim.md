@@ -255,7 +255,7 @@ changes
 How it behaves:
 - Before the world exists: the page stays black. That file doesn't exist yet, and the app builds and runs fine without it.
 - If it fails to load: the page stays black, a warning goes to the console, and nothing else breaks.
-- Dimming: a black layer at 72% opacity sits over the 3D world. To change how dark it is, edit DIM in apps/web/src/lib/backdrop/WorldBackdrop.svelte.
+- Dimming: one flat black layer at 84% opacity sits over the 3D world, with no fade and no gradient (ROLE-1 D20). To change how dark it is, edit `DIM_IDLE` in apps/web/src/lib/world/ambient.ts.
 - Reduced motion: Role 1's scene is told when the user has asked for reduced motion, so it can keep the camera still.
 - Persistence: the background stays mounted across all three pages, so switching tabs doesn't reload the 3D scene.
 

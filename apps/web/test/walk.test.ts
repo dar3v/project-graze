@@ -18,8 +18,14 @@ import {
   countPlants,
   GRASS_RADIUS,
   OOD_DENSITY,
+  PATCH_DENSITY,
+  PATCH_RADIUS_MAX,
+  PATCH_RADIUS_MIN,
+  patchDensity,
+  patchWeight,
   placeGrass,
   placeVegetation,
+  PLAINS_DENSITY,
   PLANT_STRIDE,
   plantTint,
   SPECIES,
@@ -284,6 +290,121 @@ test('vegetation: density scales the forest, steep cells stay bare', () => {
   const batches = placeVegetation({ size, cellSizeM: 30, heightmap: cliff, waterLevelM: 0, cover, ood: null, seed: 1, density: 1 })
   for (const b of batches) for (let k = 0; k < b.count; k++) assert.ok([0, size - 1].includes(Math.round(b.plants[k * PLANT_STRIDE])))
   assert.throws(() => placeVegetation({ size, cellSizeM: 30, heightmap: cliff, waterLevelM: 0, cover: new Uint8Array(3), ood: null, seed: 1, density: 1 }))
+})
+
+// ---- D21: sparse trees, small forest patches --------------------------------------
+
+/** Flat dry land, one cover class everywhere: only the patches decide where trees go. */
+function plain(size: number, classIndex: number, over: { seed?: number; density?: number; ood?: Uint8Array | null } = {}) {
+  const heightmap = new Float32Array(size * size).fill(100)
+  const cover = new Uint8Array(size * size).fill(classIndex)
+  return placeVegetation({ size, cellSizeM: 30, heightmap, waterLevelM: 50, cover, ood: over.ood ?? null, seed: over.seed ?? 7, density: over.density ?? 0.6 })
+}
+
+/** Cells (y * size + x) holding at least one plant. */
+function plantedCells(batches: ReturnType<typeof placeVegetation>, size: number): Set<number> {
+  const out = new Set<number>()
+  for (const b of batches) for (let k = 0; k < b.count; k++) out.add((Math.round(b.plants[k * PLANT_STRIDE + 1]) + 0) * size + (Math.round(b.plants[k * PLANT_STRIDE]) + 0))
+  return out
+}
+
+test('patches: the same seed and cover map give the same patches; another seed moves them', () => {
+  assert.deepEqual(flatten(plain(48, 1)), flatten(plain(48, 1)))
+  assert.notDeepEqual([...plantedCells(plain(48, 1, { seed: 8 }), 48)], [...plantedCells(plain(48, 1), 48)])
+  for (let y = 0; y < 48; y += 5) for (let x = 0; x < 48; x += 3) assert.equal(patchWeight(7, x, y), patchWeight(7, x, y))
+})
+
+test('patches: open plains, so more than half the land cells have no tree', () => {
+  const size = 64
+  const planted = plantedCells(plain(size, 1), size)
+  assert.ok(planted.size < (size * size) / 2, `${planted.size} of ${size * size} cells have a tree`)
+  // ...and there is forest: some cells are dense.
+  assert.ok(planted.size > size * size * 0.05)
+  assert.equal(patchDensity(7, 0, 0) >= PLAINS_DENSITY && patchDensity(7, 0, 0) <= PATCH_DENSITY, true)
+})
+
+test('patches: small, about 6-15 cells across', () => {
+  // Equal-area diameter of every connected patch that is not cut by the map edge.
+  const size = 128
+  const sizes: number[] = []
+  for (const seed of [3, 7, 11]) {
+    const inPatch = (x: number, y: number) => patchWeight(seed, x, y) > 0.02
+    const seen = new Uint8Array(size * size)
+    for (let i = 0; i < seen.length; i++) {
+      if (seen[i] || !inPatch(i % size, Math.floor(i / size))) continue
+      const stack = [i]
+      seen[i] = 1
+      let area = 0
+      let edge = false
+      while (stack.length) {
+        const j = stack.pop()!
+        const x = j % size
+        const y = Math.floor(j / size)
+        area++
+        if (x === 0 || y === 0 || x === size - 1 || y === size - 1) edge = true
+        for (const [nx, ny] of [[x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]]) {
+          if (nx < 0 || ny < 0 || nx >= size || ny >= size || seen[ny * size + nx] || !inPatch(nx, ny)) continue
+          seen[ny * size + nx] = 1
+          stack.push(ny * size + nx)
+        }
+      }
+      if (!edge) sizes.push(2 * Math.sqrt(area / Math.PI))
+    }
+  }
+  sizes.sort((a, b) => a - b)
+  const median = sizes[sizes.length >> 1]
+  assert.ok(sizes.length > 20, `${sizes.length} patches`)
+  assert.ok(median >= 6 && median <= 15, `median patch ${median.toFixed(1)} cells across`)
+  assert.ok(sizes[Math.floor(sizes.length * 0.1)] >= 2 * PATCH_RADIUS_MIN - 2, 'no specks')
+  assert.ok(sizes[Math.floor(sizes.length * 0.9)] <= 2 * PATCH_RADIUS_MAX + 3, 'no big merged forests')
+})
+
+test('patches: the cover class still picks the silhouette; shrubs keep their own density', () => {
+  // Each plant matches the class of its cell, inside and outside patches.
+  const size = 32
+  const heightmap = new Float32Array(size * size).fill(100)
+  const cover = Uint8Array.from({ length: size * size }, (_, i) => i % 7)
+  const batches = placeVegetation({ size, cellSizeM: 30, heightmap, waterLevelM: 50, cover, ood: null, seed: 5, density: 1 })
+  for (const b of batches)
+    for (let k = 0; k < b.count; k++) {
+      const x = Math.round(b.plants[k * PLANT_STRIDE]) + 0
+      const y = Math.round(b.plants[k * PLANT_STRIDE + 1]) + 0
+      assert.equal(cover[y * size + x], b.classIndex)
+    }
+  // Krummholz is not patchy: every land cell keeps its shrubs, patch or plains.
+  assert.equal(SPECIES[6].patchy, false)
+  assert.ok(SPECIES.slice(0, 6).every((s) => s.patchy))
+  const shrubs = plain(32, 6, { density: 1 })
+  assert.equal(plantedCells(shrubs, 32).size, 32 * 32, 'shrubs everywhere')
+  assert.ok(Math.abs(countPlants(shrubs) / (32 * 32) - SPECIES[6].perCell) < 0.1)
+})
+
+test('patches: the OOD rule applies on top, so low-trust cells stay sparser', () => {
+  const size = 64
+  const trusted = countPlants(plain(size, 1))
+  const unsure = countPlants(plain(size, 1, { ood: new Uint8Array(size * size).fill(1) }))
+  const ratio = unsure / trusted
+  assert.ok(Math.abs(ratio - OOD_DENSITY) < 0.08, `low trust keeps ${ratio.toFixed(2)} of the trees`)
+})
+
+test('patches: quality presets scale the density, not the layout', () => {
+  const size = 64
+  const inPatch = (batches: ReturnType<typeof placeVegetation>) => {
+    let n = 0
+    let total = 0
+    for (const b of batches)
+      for (let k = 0; k < b.count; k++) {
+        total++
+        if (patchWeight(7, Math.round(b.plants[k * PLANT_STRIDE]), Math.round(b.plants[k * PLANT_STRIDE + 1])) > 0) n++
+      }
+    return n / total
+  }
+  const counts = [QUALITY.low, QUALITY.medium, QUALITY.high].map((q) => plain(size, 1, { density: q.vegetationDensity }))
+  // PLAINS_DENSITY leaves a lone tree here and there; the rest stand in the patches, the same share on every preset.
+  const shares = counts.map(inPatch)
+  for (const s of shares) assert.ok(s > 0.85, `share of trees inside patches: ${s.toFixed(2)}`)
+  assert.ok(Math.max(...shares) - Math.min(...shares) < 0.05, `same layout on every preset: ${shares.map((s) => s.toFixed(2)).join(', ')}`)
+  assert.ok(countPlants(counts[0]) < countPlants(counts[1]) && countPlants(counts[1]) < countPlants(counts[2]))
 })
 
 test('vegetation culling: a chunk is kept while any part is within the radius', () => {

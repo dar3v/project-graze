@@ -2,6 +2,7 @@ export { applyMapChange, createSim, stepSim, getPositions, SimInputError } from 
 export type { Animal, CreateSimOptions, MapChange, MapChangeResult, PopulationSample, SimEvent, SimEventKind, SimState, Species } from './sim.ts'
 export { interpolatePoses, interpolateSnapshot, lerpAngle, POSE_STRIDE, posesToPositions, snapshotPoses } from './view.ts'
 export type { InterpolatedPoses, SimSnapshot, SpeciesPoses } from './view.ts'
+export { MAX_TICKS_PER_ADVANCE, medianMoveCells, medianMovingSpeed, moveDistances, SimClock, TICK_MS, tickGapMs } from './clock.ts'
 export { validateRules } from './rules.ts'
 export type { EcologyRules, HerbivoreRules, PredatorRules, RulesResult, SpeciesRules, VegetationRules } from './rules.ts'
 export { computeScore, habitatDiversity, populationStability, SCORE_MIN_SAMPLES, SCORE_WINDOW } from './score.ts'

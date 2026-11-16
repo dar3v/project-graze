@@ -1,0 +1,16 @@
+{
+  "$comment": "Custom models for the 3D world (docs/custom-models.md). Every slot is listed. null means the code-built shape is used, so an empty slot never requests a file. To use a model: export it as <slot>.glb into this folder, replace null with { \"file\": \"spire.glb\", \"author\": \"Your Name\", \"source\": \"team-made\", \"version\": 1 }, add a line to CREDITS.md, then run pnpm models:check.",
+  "version": 1,
+  "slots": {
+    "spire": null,
+    "pole": null,
+    "broadPine": null,
+    "roundCrown": null,
+    "slender": null,
+    "fullCone": null,
+    "shrub": null,
+    "grassTuft": null,
+    "herbivore": null,
+    "predator": null
+  }
+}

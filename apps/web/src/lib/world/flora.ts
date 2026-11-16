@@ -12,8 +12,17 @@
  *   attribute `tintMask` (1 on the crown, 0 on the trunk) keeps the trunk
  *   its bark color.
  *
+ * - Shapes are swappable (D17). `Flora` starts with the code-built shapes
+ *   below; `setShapes()` hands it team-made geometries from `./models.ts`,
+ *   which replace the matching slots the next time the plants are built. A
+ *   slot with no custom shape keeps its code-built one.
+ * - Wind sway (D18) is a vertex-shader displacement on the same material: no
+ *   extra draw calls, driven by the scene clock, off with reduced motion.
+ *
  * Everything created here is disposed by `dispose()`, which the renderer
- * calls when the vegetation is no longer shown (D12).
+ * calls when the vegetation is no longer shown (D12). Custom shapes are
+ * CLONED when the plants are built and the clones are disposed with the rest,
+ * so the loaded model set itself is never touched and never reloaded.
  */
 
 import * as THREE from 'three'
@@ -25,6 +34,14 @@ import { PALETTE } from './palette.ts'
 import { sampleHeight } from './terrain.ts'
 import { CHUNK_CELLS, chunkInRange, PLANT_STRIDE, SPECIES } from './vegetation.ts'
 import type { PlantBatch, Silhouette } from './vegetation.ts'
+
+/** Custom geometries by slot (the 7 silhouettes and the grass tuft). Missing slots keep the code-built shape. */
+export type FloraShapes = Partial<Record<Silhouette | 'grassTuft', THREE.BufferGeometry>>
+
+/** Sway of a plant's top, world units per unit of height squared (a 1.4-unit tree tip moves about 0.04). */
+export const PLANT_SWAY = 0.02
+/** Grass sways more than trees. */
+export const GRASS_SWAY = 0.9
 
 type Part = { geo: THREE.BufferGeometry; color: string; tint: boolean; shadeBottom?: number }
 
@@ -138,17 +155,44 @@ function tuftGeometry(): THREE.BufferGeometry {
   return g
 }
 
-/** Lambert material whose instance tint is applied only where `tintMask` is 1. */
-function tintedMaterial(side: THREE.Side): THREE.MeshLambertMaterial {
+interface SwayUniforms {
+  /** Scene clock, seconds. Shared by the plants and the grass. */
+  readonly uTime: { value: number }
+  /** Sway amplitude; 0 turns the sway off (reduced motion). */
+  readonly uSway: { value: number }
+}
+
+/**
+ * Lambert material whose instance tint is applied only where `tintMask` is 1,
+ * with wind sway: the vertices lean with the square of their height, so the
+ * base stays planted, and each plant gets its own phase from its position.
+ */
+function tintedMaterial(side: THREE.Side, sway: SwayUniforms): THREE.MeshLambertMaterial {
   const m = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, side })
   m.onBeforeCompile = (shader) => {
-    shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nattribute float tintMask;').replace(
-      '#include <color_vertex>',
-      /* glsl */ `vColor = vec4(color, 1.0);
+    shader.uniforms.uTime = sway.uTime
+    shader.uniforms.uSway = sway.uSway
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nattribute float tintMask;\nuniform float uTime;\nuniform float uSway;')
+      .replace(
+        '#include <color_vertex>',
+        /* glsl */ `vColor = vec4(color, 1.0);
 #ifdef USE_INSTANCING_COLOR
   vColor.rgb *= mix(vec3(1.0), instanceColor.rgb, tintMask);
 #endif`,
-    )
+      )
+      .replace(
+        '#include <begin_vertex>',
+        /* glsl */ `#include <begin_vertex>
+#ifdef USE_INSTANCING
+  if (uSway > 0.0) {
+    float grazeH = max(position.y, 0.0);
+    float grazePhase = instanceMatrix[3].x * 0.7 + instanceMatrix[3].z * 1.3;
+    transformed.x += sin(uTime * 1.6 + grazePhase) * uSway * grazeH * grazeH;
+    transformed.z += cos(uTime * 1.1 + grazePhase) * uSway * 0.6 * grazeH * grazeH;
+  }
+#endif`,
+      )
   }
   m.customProgramCacheKey = () => 'graze-flora'
   return m
@@ -179,9 +223,45 @@ export class Flora {
   #grass: THREE.InstancedMesh | null = null
   #grassCapacity = 0
   #castShadow = true
+  #shapes: FloraShapes = {}
+  readonly #uTime = { value: 0 }
+  readonly #plantSway = { value: PLANT_SWAY }
+  readonly #grassSway = { value: GRASS_SWAY }
 
   constructor(scene: THREE.Scene) {
     this.#scene = scene
+  }
+
+  /**
+   * Use these custom geometries (D17) from now on. The plants and the grass
+   * that exist are freed, because their meshes hold the old shapes: the
+   * caller builds them again (`setPlants`, `setGrass`). Returns true when
+   * something has to be rebuilt.
+   */
+  setShapes(shapes: FloraShapes): boolean {
+    this.#shapes = { ...shapes }
+    const had = this.hasPlants || this.#grass !== null
+    this.#clearPlants()
+    this.disposeGrass()
+    this.#geometries?.forEach((g) => g.dispose())
+    this.#geometries = null
+    return had
+  }
+
+  /** How many of the 8 flora slots use a custom shape. */
+  get customShapes(): number {
+    return Object.keys(this.#shapes).length
+  }
+
+  /** Scene clock for the wind sway (seconds). */
+  setTime(t: number): void {
+    this.#uTime.value = t
+  }
+
+  /** Wind sway on or off (off with reduced motion). */
+  setSway(on: boolean): void {
+    this.#plantSway.value = on ? PLANT_SWAY : 0
+    this.#grassSway.value = on ? GRASS_SWAY : 0
   }
 
   get hasPlants(): boolean {
@@ -192,8 +272,9 @@ export class Flora {
   setPlants(batches: readonly PlantBatch[], heightmap: Float32Array, frame: Frame): void {
     this.#clearPlants()
     if (batches.length === 0) return
-    this.#geometries ??= SPECIES.map((s) => SILHOUETTES[s.silhouette]())
-    this.#material ??= tintedMaterial(THREE.FrontSide)
+    // A custom shape is cloned, so disposing the plants never touches the loaded model set.
+    this.#geometries ??= SPECIES.map((s) => this.#shapes[s.silhouette]?.clone() ?? SILHOUETTES[s.silhouette]())
+    this.#material ??= tintedMaterial(THREE.FrontSide, { uTime: this.#uTime, uSway: this.#plantSway })
     const m = new THREE.Matrix4()
     const q = new THREE.Quaternion()
     const p = new THREE.Vector3()
@@ -249,7 +330,11 @@ export class Flora {
     if (!this.#grass || n > this.#grassCapacity) {
       const old = this.#grass
       this.#grassCapacity = Math.max(n, this.#grassCapacity * 2, 512)
-      this.#grass = new THREE.InstancedMesh(old?.geometry ?? tuftGeometry(), old?.material ?? tintedMaterial(THREE.DoubleSide), this.#grassCapacity)
+      this.#grass = new THREE.InstancedMesh(
+        old?.geometry ?? this.#shapes.grassTuft?.clone() ?? tuftGeometry(),
+        old?.material ?? tintedMaterial(THREE.DoubleSide, { uTime: this.#uTime, uSway: this.#grassSway }),
+        this.#grassCapacity,
+      )
       this.#grass.frustumCulled = false // re-placed around the walker; always near the camera
       this.#grass.castShadow = false
       this.#grass.receiveShadow = false

@@ -15,13 +15,24 @@
  *   fauna.ts            animal meshes
  *   walk.ts             walk physics (getGroundHeight, speed, slope, water)
  *   quality.ts          presets and the frame-rate guard
+ *   ambient.ts          the backdrop: vantage, continuous turn, idle cost, who draws
+ *   models.ts           team-made .glb shapes that replace the code-built ones
+ *   pace.ts             animal pace on foot, and the measured speed
+ *
+ * One class, two uses. The Sandbox's `WorldView` makes an interactive one
+ * (orbit view and walk mode). The page background makes an `ambient` one: the
+ * walk look from a seeded vantage, slowly and endlessly turning, no input. Only
+ * one of the two draws at a time (D14): `setActive(false)` stops a renderer's
+ * frame loop and frees its plants and shadow map, and it keeps showing the
+ * last frame it drew.
  *
  * Performance notes (target: 30+ fps on a weak laptop):
  * - one vertex per cell (128 x 128 = 16k vertices, 32k triangles);
  * - flat shading computes normals in the fragment shader, so sculpting only
  *   re-uploads the touched rows of the position, normal and color buffers;
  * - orbit view renders on demand (after a change or while the camera moves);
- *   walk mode and the day/night cycle render every frame;
+ *   walk mode and the day/night cycle render every frame; the ambient
+ *   backdrop renders at most `fpsCap` frames a second;
  * - the shadow map is redrawn only when the sun, the terrain, the vegetation
  *   or the walker's neighbourhood changes, not every frame;
  * - vegetation is chunked: far chunks are hidden, the rest are frustum-culled;
@@ -32,6 +43,8 @@ import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js'
 
+import { AMBIENT_PITCH, ambientYaw, findVantage, isDry, stepAmbientClock } from './ambient.ts'
+import type { Vantage } from './ambient.ts'
 import { DirtyRectBatcher } from './batcher.ts'
 import { hexToRgb01, writeColors } from './colors.ts'
 import type { OverlayMode, Rgb } from './colors.ts'
@@ -41,8 +54,13 @@ import { advanceHour, dayState, wrapHour } from './daynight.ts'
 import type { DayState } from './daynight.ts'
 import { Fauna, ORBIT_ANIMAL_SCALE, WALK_ANIMAL_SCALE } from './fauna.ts'
 import { Flora } from './flora.ts'
+import { modelsLine, NO_MODELS } from './modelRules.ts'
+import type { ModelReport } from './modelRules.ts'
+import { loadModels } from './models.ts'
+import type { ModelSet } from './models.ts'
+import { PaceMeter } from './pace.ts'
 import { PALETTE } from './palette.ts'
-import { DEFAULT_QUALITY, FpsGuard, QUALITY } from './quality.ts'
+import { DEFAULT_QUALITY, FpsGuard, QUALITY, TARGET_FPS } from './quality.ts'
 import type { QualityPreset } from './quality.ts'
 import { SkyDome } from './sky.ts'
 import { applyBrush, padRect, sampleHeight } from './terrain.ts'
@@ -50,8 +68,11 @@ import type { BrushMode, DirtyRect } from './terrain.ts'
 import { createTerrainMaterial } from './terrainMaterial.ts'
 import type { TerrainUniforms } from './terrainMaterial.ts'
 import { GRASS_RADIUS, placeGrass, placeVegetation } from './vegetation.ts'
-import { eyeY, findSpawn, stepWalk, WADE_DEPTH_M, waterDepth, yawToBearing } from './walk.ts'
-import type { Blocked, WalkTerrain } from './walk.ts'
+import { DEFAULT_LOOK, eyeY, findSpawn, getGroundHeight, LOOK_SENSITIVITY_RANGE, settleWalker, stepWalk, WADE_DEPTH_M, WALK_FOV_DEFAULT, WALK_FOV_RANGE, yawToBearing } from './walk.ts'
+import type { Blocked, ExitReason, LookSettings, WalkTerrain } from './walk.ts'
+
+export { DEFAULT_LOOK, LOOK_SENSITIVITY_RANGE, WALK_FOV_DEFAULT, WALK_FOV_RANGE } from './walk.ts'
+export type { ExitReason, LookSettings } from './walk.ts'
 import { WaterSurface } from './water.ts'
 
 export type WorldTool = 'select' | BrushMode
@@ -128,20 +149,36 @@ export interface WorldStats {
   readonly pixelRatio: number
   readonly quality: QualityPreset
   readonly mode: ViewMode
+  /** Median speed of the animals that moved since the last reading, cells per second (D16). */
+  readonly animalSpeed: number
+  /** The models line (D17), for example `models: 0/10 custom, 10 default`. */
+  readonly models: string
+  /** False while this renderer is not the one drawing (D14). */
+  readonly active: boolean
 }
 
 export interface WorldRendererOptions {
-  /** Pointer input (orbit, brush, picking, walking). False for the decorative backdrop. */
+  /** Pointer input (orbit, brush, picking, walking). False for the backdrop. */
   readonly interactive: boolean
-  /** Slowly orbit the camera (backdrop). Ignored when `reducedMotion` is true. */
-  readonly autoRotate?: boolean
+  /**
+   * The page background (D14): the walk look from a seeded vantage on dry
+   * land, at eye height, turning slowly and without end, with no travel. There is no
+   * orbit view and no input in this mode.
+   */
+  readonly ambient?: boolean
   readonly reducedMotion?: boolean
   readonly maxPixelRatio?: number
+  /** Draw at most this many frames a second (the backdrop: 30). */
+  readonly fpsCap?: number
+  /** Frame rate the guard reports under. Default `TARGET_FPS`. */
+  readonly lowFpsTarget?: number
   /**
    * Sky, day/night, shadows, vegetation and the natural water. Defaults to
-   * `interactive`. The backdrop turns it off and keeps the app's dark look.
+   * true for an interactive or ambient renderer.
    */
   readonly scenery?: boolean
+  /** Team-made models (D17). Default: the app's set (`loadModels()`). Pass null for the code-built shapes only. */
+  readonly models?: Promise<ModelSet> | null
   /** Called with the clicked cell (select tool) or the cell underfoot (walk mode, E). */
   readonly onPick?: (x: number, y: number) => void
   /** Debounced: the union of cells whose raw inputs may have changed. */
@@ -149,7 +186,7 @@ export interface WorldRendererOptions {
   /** Debounce for onHeightmapChange, ms. Default 250 (same as the app's batch debounce). */
   readonly changeDebounceMs?: number
   /** Walk mode wants to leave (Esc, or the pointer lock was released). */
-  readonly onViewModeRequest?: (mode: ViewMode) => void
+  readonly onViewModeRequest?: (mode: ViewMode, reason: ExitReason) => void
   readonly onWalkStatus?: (status: WalkStatus) => void
   /** The frame rate stayed under TARGET_FPS for LOW_FPS_SECONDS while animating. */
   readonly onLowFps?: (fps: number) => void
@@ -208,7 +245,8 @@ class LookControls extends PointerLockControls {
 
 const CLICK_SLOP_PX = 5
 const ORBIT_FOV = 45
-const WALK_FOV = 68
+/** Mouse look under pointer lock, radians per pixel at sensitivity 1 (three's PointerLockControls default). */
+const LOCKED_LOOK_SPEED = 0.002
 const ORBIT_NEAR = 0.5
 const WALK_NEAR = 0.05
 /** Seconds for the camera to travel between the orbit view and eye level. */
@@ -274,7 +312,11 @@ export class WorldRenderer {
   readonly #fauna: Fauna
   readonly #terrainMaterial: THREE.MeshLambertMaterial
   readonly #terrainUniforms: TerrainUniforms
-  readonly #guard = new FpsGuard()
+  readonly #guard: FpsGuard
+  readonly #ambient: boolean
+  readonly #pace = new PaceMeter()
+  readonly #disposeTerrainMaterial: () => void
+  readonly #scratchEuler = new THREE.Euler(0, 0, 0, 'YXZ')
 
   #terrain: TerrainData | null = null
   #frame: Frame | null = null
@@ -316,7 +358,7 @@ export class WorldRenderer {
   #eyeY = 0
   #keys = new Set<string>()
   #joystick = { strafe: 0, forward: 0 }
-  #look: LookControls | null = null
+  #lookControls: LookControls | null = null
   #lookState: LookState = 'unsupported'
   #unbindWalk: (() => void) | null = null
   #lastStatus = ''
@@ -327,8 +369,26 @@ export class WorldRenderer {
   #raf = 0
   #needsRender = true
   #lastTime = 0
-  #angle = Math.PI * 0.15
   #destroyed = false
+
+  // Who draws (D14)
+  #active = true
+  /** True while `renderStill()` draws its one frame. */
+  #still = false
+  #hasFrame = false
+  #resizePending = false
+  #unbindVisibility: (() => void) | null = null
+
+  // Ambient backdrop (D14)
+  #vantage: Vantage | null = null
+  #ambientT = 0
+
+  // Walk settings and what survives an exit (D15)
+  #look: LookSettings = DEFAULT_LOOK
+  #walkYaw: number | null = null
+
+  // Custom models (D17)
+  #modelReport: ModelReport = NO_MODELS
 
   // Pointer state (orbit view)
   #pointer = new THREE.Vector2()
@@ -338,8 +398,12 @@ export class WorldRenderer {
   constructor(host: HTMLElement, opts: WorldRendererOptions) {
     this.#host = host
     this.#opts = opts
-    this.#scenery = opts.scenery ?? opts.interactive
+    this.#ambient = !!opts.ambient
+    this.#scenery = opts.scenery ?? (opts.interactive || this.#ambient)
     this.#reducedMotion = !!opts.reducedMotion
+    this.#guard = new FpsGuard(opts.lowFpsTarget ?? TARGET_FPS)
+    // The ambient view is a walk view nobody steers: natural ground, plants culled by distance, animals at ground scale.
+    if (this.#ambient) this.#mode = 'walk'
     const gl = createContext()
     if (!gl) throw new WorldUnavailableError()
     try {
@@ -364,6 +428,7 @@ export class WorldRenderer {
     const terrain = createTerrainMaterial()
     this.#terrainMaterial = terrain.material
     this.#terrainUniforms = terrain.uniforms
+    this.#disposeTerrainMaterial = terrain.dispose
 
     this.#water = new WaterSurface()
     this.#water.applyFlat(PALETTE.backdrop.water)
@@ -405,12 +470,37 @@ export class WorldRenderer {
       opts.onHeightmapChange?.(r)
     })
 
+    if (this.#ambient) {
+      this.#camera.near = WALK_NEAR
+      this.#camera.fov = WALK_FOV_DEFAULT
+      this.#fogBlend = 1
+    }
+    this.#flora.setSway(!this.#reducedMotion)
+    this.#fauna.setSwing(!this.#reducedMotion)
     this.#applyQuality()
     this.#applyDay()
     this.#resize = new ResizeObserver(() => this.#onResize())
     this.#resize.observe(host)
     this.#onResize()
-    this.#raf = requestAnimationFrame(this.#tick)
+
+    // Team-made shapes replace the code-built ones when they arrive (D17).
+    // Until then, and for every slot that fails, the code-built shape is drawn.
+    if (this.#scenery && opts.models !== null) {
+      void (opts.models ?? loadModels()).then(
+        (set) => this.#applyModels(set),
+        () => undefined, // loadModelSet never rejects; a custom promise might
+      )
+    }
+
+    // A hidden tab draws nothing (rAF already pauses there; this also resets the frame-rate guard).
+    const doc = host.ownerDocument
+    const onVisibility = () => {
+      if (doc.hidden) this.#stopLoop()
+      else this.#startLoop()
+    }
+    doc.addEventListener('visibilitychange', onVisibility)
+    this.#unbindVisibility = () => doc.removeEventListener('visibilitychange', onVisibility)
+    this.#startLoop()
   }
 
   // ---- Public API -----------------------------------------------------------
@@ -441,9 +531,14 @@ export class WorldRenderer {
       this.#controls?.target.set(0, 0, 0)
       this.#controls?.update()
     }
-    if (newGround) {
-      // A different world: the walker starts again from a dry spot.
-      this.#player = null
+    if (this.#ambient) {
+      // A different world gets a new vantage; the same one keeps it while it stays dry.
+      this.#standAmbient(newGround)
+    } else if (newGround && this.#player) {
+      // A different world (re-seed, opened world): the walker keeps their spot
+      // if it is still a place to stand, else moves to the nearest dry cell (D15).
+      const settled = settleWalker(this.#player.x, this.#player.z, this.#walkTerrain())
+      this.#player = { x: settled.x, z: settled.z }
       if (this.#mode === 'walk') this.#placeWalker(true)
     }
     this.#floraDirty = true
@@ -457,8 +552,10 @@ export class WorldRenderer {
   refreshRegion(rect: DirtyRect): void {
     if (!this.#terrain) return
     this.#refresh(rect)
+    if (this.#ambient) this.#standAmbient(false)
     this.#floraDirty = true
     this.#syncFlora()
+    this.#placeAnimals()
   }
 
   setWaterLevel(m: number): void {
@@ -473,6 +570,7 @@ export class WorldRenderer {
     if (changed) {
       // Underwater cells are tinted as riverbed, and plants leave flooded cells.
       this.#recolor({ x0: 0, y0: 0, x1: this.#terrain.size - 1, y1: this.#terrain.size - 1 })
+      if (this.#ambient) this.#standAmbient(false)
       this.#floraDirty = true
       this.#syncFlora()
       this.#placeAnimals()
@@ -508,6 +606,7 @@ export class WorldRenderer {
    */
   setAnimals(herbivores: Float32Array | null, predators: Float32Array | null, stride = 2): void {
     this.#animalData = { herbivores, predators, stride: stride >= 3 ? 3 : 2 }
+    this.#pace.sample(herbivores, predators, this.#animalData.stride, performance.now() / 1000)
     this.#placeAnimals()
   }
 
@@ -559,7 +658,80 @@ export class WorldRenderer {
 
   setReducedMotion(on: boolean): void {
     this.#reducedMotion = on
+    this.#flora.setSway(!on)
+    this.#fauna.setSwing(!on)
     this.requestRender()
+  }
+
+  /** Mouse sensitivity, inverted look and field of view in walk mode (D15). Takes effect at once. */
+  setLook(look: LookSettings): void {
+    const clamp = (v: number, lo: number, hi: number, fallback: number) => (Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : fallback)
+    this.#look = {
+      sensitivity: clamp(look.sensitivity, LOOK_SENSITIVITY_RANGE.min, LOOK_SENSITIVITY_RANGE.max, DEFAULT_LOOK.sensitivity),
+      invertY: !!look.invertY,
+      fov: clamp(look.fov, WALK_FOV_RANGE.min, WALK_FOV_RANGE.max, DEFAULT_LOOK.fov),
+    }
+    // On foot and not mid-glide: the view changes now. Otherwise the next glide ends on it.
+    if (!this.#ambient && this.#mode === 'walk' && !this.#transition) {
+      this.#camera.fov = this.#look.fov
+      this.#camera.updateProjectionMatrix()
+      this.requestRender()
+    }
+  }
+
+  /**
+   * Whether this renderer is the one drawing (D14). Only one draws at a time.
+   * Inactive: the frame loop stops, the plants, the grass and the shadow map
+   * are freed, and the canvas keeps showing the last frame. Active again: they
+   * are rebuilt and the loop restarts.
+   */
+  setActive(on: boolean): void {
+    if (on === this.#active || this.#destroyed) return
+    this.#active = on
+    if (on) {
+      if (this.#resizePending) this.#applyResize()
+      this.#floraDirty = true
+      this.#grassCenter = null
+      this.#cullCenter = null
+      this.#syncFlora()
+      this.#cullFlora()
+      if (this.#mode === 'walk' && this.#walkReady) this.#syncGrass(true)
+      this.#shadowsDirty = true
+      this.#guard.reset()
+      this.requestRender()
+      this.#startLoop()
+    } else {
+      this.#stopLoop()
+      this.#batcher.flush()
+      this.#freeScenery()
+    }
+  }
+
+  get active(): boolean {
+    return this.#active
+  }
+
+  /**
+   * Draw ONE frame while inactive, so the still this renderer shows matches
+   * the world (new terrain, a new cover map, another time of day). The plants
+   * are built for that frame and freed again straight after it.
+   */
+  renderStill(): void {
+    if (this.#destroyed || this.#active || !this.#terrain) return
+    if (this.#resizePending) this.#applyResize()
+    this.#still = true
+    try {
+      this.#floraDirty = true
+      this.#cullCenter = null
+      this.#syncFlora()
+      this.#cullFlora()
+      this.#placeAnimals()
+      this.#shadowsDirty = true
+      this.#render()
+    } finally {
+      this.#still = false
+      this.#freeScenery()
+    }
   }
 
   /** World seed for vegetation placement: the same seed and cover map give the same forest. */
@@ -567,6 +739,7 @@ export class WorldRenderer {
     const s = Number.isFinite(seed) ? Math.trunc(seed) | 0 : 0
     if (s === this.#seed) return
     this.#seed = s
+    if (this.#ambient) this.#standAmbient(true)
     this.#floraDirty = true
     this.#grassCenter = null
     this.#syncFlora()
@@ -612,6 +785,9 @@ export class WorldRenderer {
       pixelRatio: this.#renderer.getPixelRatio(),
       quality: this.#quality,
       mode: this.#mode,
+      animalSpeed: this.#pace.read(),
+      models: modelsLine(this.#modelReport),
+      active: this.#active,
     }
   }
 
@@ -624,7 +800,8 @@ export class WorldRenderer {
   destroy(): void {
     if (this.#destroyed) return
     this.#destroyed = true
-    cancelAnimationFrame(this.#raf)
+    this.#stopLoop()
+    this.#unbindVisibility?.()
     this.#batcher.cancel()
     this.#resize.disconnect()
     this.#unbindPointer?.()
@@ -636,7 +813,7 @@ export class WorldRenderer {
     this.#sky?.dispose()
     this.#sun.shadow.map?.dispose()
     this.#mesh?.geometry.dispose()
-    this.#terrainMaterial.dispose()
+    this.#disposeTerrainMaterial() // the material and its ground detail texture
     for (const line of [this.#cursor, this.#selection]) {
       line.geometry.dispose()
       line.material.dispose()
@@ -747,6 +924,8 @@ export class WorldRenderer {
 
   #stepCycle(dt: number): void {
     if (!this.#autoCycle || !this.#scenery || dt <= 0) return
+    // Behind the pages, reduced motion freezes the clock at its current value (D14).
+    if (this.#ambient && this.#reducedMotion) return
     this.#hour = advanceHour(this.#hour, dt)
     // Colors follow every frame; the shadow map is redrawn in small steps.
     const wasDirty = this.#shadowsDirty
@@ -775,7 +954,39 @@ export class WorldRenderer {
 
   /** Plants are drawn on foot, and in orbit view under the natural "Terrain" overlay. */
   #floraWanted(): boolean {
+    // An inactive renderer holds no plants (D14), except for the one frame of a still.
+    if (!this.#active && !this.#still) return false
     return this.#scenery && !!this.#terrain && !!this.#cover() && (this.#naturalView() || this.#overlay.mode === 'terrain')
+  }
+
+  /** Free what an inactive renderer must not hold: plants, grass and the shadow map (D14). */
+  #freeScenery(): void {
+    this.#flora.dispose()
+    this.#floraDirty = true
+    this.#grassCenter = null
+    this.#cullCenter = null
+    this.#sun.shadow.map?.dispose()
+    this.#sun.shadow.map = null
+  }
+
+  /** Swap in the team-made shapes that loaded and passed validation (D17). */
+  #applyModels(set: ModelSet): void {
+    if (this.#destroyed) return
+    this.#modelReport = set.report
+    const { herbivore, predator, ...plants } = set.geometries
+    if (Object.keys(plants).length > 0) {
+      this.#flora.setShapes(plants)
+      this.#floraDirty = true
+      this.#grassCenter = null
+      this.#syncFlora()
+      if (this.#active && !this.#ambient && this.#mode === 'walk' && this.#walkReady) this.#syncGrass(true)
+    }
+    if (herbivore || predator) {
+      this.#fauna.setShapes({ ...(herbivore ? { herbivore } : {}), ...(predator ? { predator } : {}) })
+      this.#placeAnimals()
+    }
+    this.#shadowsDirty = true
+    this.requestRender()
   }
 
   #syncFlora(): void {
@@ -832,7 +1043,8 @@ export class WorldRenderer {
     const t = this.#terrain
     const f = this.#frame
     const p = this.#player
-    if (!t || !f || !p || this.#mode !== 'walk') return
+    // No grass in the ambient view (its preset has none) or while inactive.
+    if (!t || !f || !p || this.#mode !== 'walk' || this.#ambient || !this.#active) return
     const c = worldToCellF(p.x, p.z, f)
     if (!force && this.#grassCenter && Math.hypot(c.x - this.#grassCenter.x, c.y - this.#grassCenter.y) < GRASS_RADIUS * 0.2) return
     this.#grassCenter = c
@@ -877,8 +1089,11 @@ export class WorldRenderer {
     if (!this.#player) {
       const want = this.#controls?.target ?? new THREE.Vector3()
       this.#player = findSpawn(want.x, want.z, wt)
-    } else if (waterDepth(this.#player.x, this.#player.z, wt) > WADE_DEPTH_M) {
-      this.#player = findSpawn(this.#player.x, this.#player.z, wt)
+    } else {
+      // The ground or the water may have changed since they last stood here (D15):
+      // never start in deep water, never outside the map.
+      const settled = settleWalker(this.#player.x, this.#player.z, wt)
+      this.#player = { x: settled.x, z: settled.z }
     }
     const step = stepWalk(this.#player.x, this.#player.z, { forward: 0, strafe: 0, run: false, yaw: 0 }, 0, wt)
     this.#player = { x: step.x, z: step.z }
@@ -887,6 +1102,35 @@ export class WorldRenderer {
     this.#grassCenter = null
     this.#cullCenter = null
     this.#shadowsDirty = true
+  }
+
+  /**
+   * Ambient backdrop (D14): stand the camera on its vantage, at eye height on
+   * the live ground. `recompute` picks a new vantage (a new world or seed);
+   * otherwise the vantage is kept unless the water reached it.
+   */
+  #standAmbient(recompute: boolean): void {
+    const f = this.#frame
+    if (!f || !this.#terrain) return
+    const wt = this.#walkTerrain()
+    if (recompute || !this.#vantage || !isDry(this.#vantage.x, this.#vantage.z, wt)) this.#vantage = findVantage(wt, this.#seed)
+    const v = this.#vantage
+    this.#player = { x: v.x, z: v.z }
+    this.#eyeY = eyeY(heightToWorldY(getGroundHeight(v.x, v.z, wt), f), this.#waterY())
+    this.#camera.position.set(v.x, this.#eyeY, v.z)
+    this.#aimAmbient()
+    this.#applyFog()
+    this.#cullCenter = null
+    this.#cullFlora()
+    this.#shadowsDirty = true
+    this.requestRender()
+  }
+
+  /** The slow, continuous turn (D19): only the heading moves. Frozen with reduced motion. */
+  #aimAmbient(): void {
+    if (!this.#vantage) return
+    this.#scratchEuler.set(AMBIENT_PITCH, ambientYaw(this.#vantage.yaw, this.#ambientT), 0, 'YXZ')
+    this.#camera.quaternion.setFromEuler(this.#scratchEuler)
   }
 
   #applyMode(): void {
@@ -936,14 +1180,14 @@ export class WorldRenderer {
 
     this.#placeWalker(false)
     const p = this.#player!
-    // Face the way the orbit camera was looking.
+    // Face the way they faced when they last left (D15); the first time, the way the orbit camera looks.
     const target = this.#controls?.target ?? new THREE.Vector3()
     const dir = new THREE.Vector3().subVectors(target, this.#orbitPose.pos)
-    const yaw = Math.hypot(dir.x, dir.z) > 1e-3 ? Math.atan2(-dir.x, -dir.z) : 0
+    const yaw = this.#walkYaw ?? (Math.hypot(dir.x, dir.z) > 1e-3 ? Math.atan2(-dir.x, -dir.z) : 0)
     const to: Pose = {
       pos: new THREE.Vector3(p.x, this.#eyeY, p.z),
       quat: new THREE.Quaternion().setFromEuler(new THREE.Euler(-0.06, yaw, 0, 'YXZ')),
-      fov: WALK_FOV,
+      fov: this.#look.fov,
     }
     this.#camera.near = WALK_NEAR
     this.#camera.updateProjectionMatrix()
@@ -960,6 +1204,8 @@ export class WorldRenderer {
   }
 
   #exitWalk(): void {
+    // The walker's position (#player) and heading survive the exit, so "Resume" returns to the same spot.
+    if (this.#walkReady) this.#walkYaw = new THREE.Euler().setFromQuaternion(this.#camera.quaternion, 'YXZ').y
     this.#mode = 'orbit'
     this.#walkReady = false
     this.#leaveWalkInput()
@@ -1018,8 +1264,8 @@ export class WorldRenderer {
     const doc = el.ownerDocument
     el.style.touchAction = 'none'
 
-    const requestOrbit = () => {
-      if (this.#opts.onViewModeRequest) this.#opts.onViewModeRequest('orbit')
+    const requestOrbit = (reason: ExitReason) => {
+      if (this.#opts.onViewModeRequest) this.#opts.onViewModeRequest('orbit', reason)
       else this.setMode('orbit')
     }
 
@@ -1028,11 +1274,20 @@ export class WorldRenderer {
     const look = new LookControls(this.#camera, el)
     look.minPolarAngle = Math.PI / 2 - MAX_PITCH
     look.maxPolarAngle = Math.PI / 2 + MAX_PITCH
-    this.#look = look
+    // The addon only handles the lock itself here. The turning is done below
+    // (`lockedMove`), so sensitivity and inverted look apply (D15).
+    look.pointerSpeed = 0
+    const lockedMove = (e: MouseEvent) => {
+      if (this.#lookControls !== look || !look.isLocked) return
+      const k = LOCKED_LOOK_SPEED * this.#look.sensitivity
+      this.#lookBy(-e.movementX * k, (this.#look.invertY ? 1 : -1) * e.movementY * k)
+    }
+    doc.addEventListener('mousemove', lockedMove)
+    this.#lookControls = look
     const supported = typeof el.requestPointerLock === 'function' && 'pointerLockElement' in doc
     this.#lookState = supported ? 'prompt' : 'unsupported'
     const onLockError = () => {
-      if (this.#look !== look) return
+      if (this.#lookControls !== look) return
       this.#lookState = 'failed'
       this.#emitStatus(true)
     }
@@ -1046,10 +1301,12 @@ export class WorldRenderer {
       this.#emitStatus(true)
     }
     const onUnlock = () => {
-      if (this.#look !== look) return
+      if (this.#lookControls !== look) return
       // Esc (or anything else that releases the pointer) leaves walk mode.
+      // The browser handles Esc itself while locked, so the page never sees
+      // the key: a lock released while the window still has focus was Esc.
       this.#lookState = 'prompt'
-      requestOrbit()
+      requestOrbit(doc.hasFocus() && !doc.hidden ? 'escape' : 'lock-lost')
     }
     look.addEventListener('lock', onLock)
     look.addEventListener('unlock', onUnlock)
@@ -1063,7 +1320,7 @@ export class WorldRenderer {
       }
       if (e.code === 'KeyE' && !e.repeat) this.probeUnderfoot()
       // While locked the browser handles Esc itself and fires `unlock`.
-      else if (e.code === 'Escape' && this.#lookState !== 'locked') requestOrbit()
+      else if (e.code === 'Escape' && this.#lookState !== 'locked') requestOrbit('escape')
     }
     const keyup = (e: KeyboardEvent) => this.#keys.delete(e.code)
     const blur = () => this.#keys.clear()
@@ -1086,7 +1343,8 @@ export class WorldRenderer {
     }
     const move = (e: PointerEvent) => {
       if (!drag || drag.id !== e.pointerId) return
-      this.#lookBy(-(e.clientX - drag.x) * DRAG_LOOK_SPEED, -(e.clientY - drag.y) * DRAG_LOOK_SPEED)
+      const k = DRAG_LOOK_SPEED * this.#look.sensitivity
+      this.#lookBy(-(e.clientX - drag.x) * k, (this.#look.invertY ? 1 : -1) * (e.clientY - drag.y) * k)
       drag = { id: e.pointerId, x: e.clientX, y: e.clientY }
     }
     const up = (e: PointerEvent) => {
@@ -1112,11 +1370,12 @@ export class WorldRenderer {
       el.removeEventListener('pointerup', up)
       el.removeEventListener('pointercancel', up)
       doc.removeEventListener('pointerlockerror', onLockError)
+      doc.removeEventListener('mousemove', lockedMove)
       look.removeEventListener('lock', onLock)
       look.removeEventListener('unlock', onUnlock)
       look.onLockError = null
       // Cleared first, so the `unlock` this causes is not read as "leave walk mode".
-      this.#look = null
+      this.#lookControls = null
       if (look.isLocked) look.unlock()
       look.dispose() // disconnect(): removes its mousemove / pointerlockchange listeners
     }
@@ -1520,6 +1779,16 @@ export class WorldRenderer {
   // ---- Frame loop ------------------------------------------------------------------
 
   #onResize(): void {
+    // Not drawing: keep the frame that is on screen (CSS scales it) and resize when drawing resumes.
+    if (!this.#active && this.#hasFrame) {
+      this.#resizePending = true
+      return
+    }
+    this.#applyResize()
+  }
+
+  #applyResize(): void {
+    this.#resizePending = false
     const w = this.#host.clientWidth || 1
     const h = this.#host.clientHeight || 1
     this.#renderer.setSize(w, h, false)
@@ -1531,6 +1800,9 @@ export class WorldRenderer {
   #render(): void {
     if (this.#sky) this.#sky.update(this.#camera, this.#time)
     this.#water.setTime(this.#time)
+    this.#flora.setTime(this.#time)
+    this.#fauna.setTime(this.#time, performance.now() / 1000)
+    this.#hasFrame = true
     if (this.#shadowsDirty) {
       this.#shadowsDirty = false
       this.#updateShadows()
@@ -1538,20 +1810,36 @@ export class WorldRenderer {
     this.#renderer.render(this.#scene, this.#camera)
   }
 
-  #tick = (now: number): void => {
-    if (this.#destroyed) return
+  #startLoop(): void {
+    if (this.#raf || this.#destroyed || !this.#active || this.#host.ownerDocument.hidden) return
+    this.#lastTime = 0
+    this.#guard.reset()
     this.#raf = requestAnimationFrame(this.#tick)
+  }
+
+  #stopLoop(): void {
+    cancelAnimationFrame(this.#raf)
+    this.#raf = 0
+  }
+
+  #tick = (now: number): void => {
+    if (this.#destroyed || !this.#active) {
+      this.#raf = 0
+      return
+    }
+    this.#raf = requestAnimationFrame(this.#tick)
+    // Frame-rate cap (the backdrop): skip this callback until enough time has passed.
+    const cap = this.#opts.fpsCap
+    if (cap && this.#lastTime && now - this.#lastTime < 1000 / cap - 2) return
     const raw = this.#lastTime ? (now - this.#lastTime) / 1000 : 0
     const dt = Math.min(0.1, raw)
     this.#lastTime = now
 
     if (this.#orbitInput()) this.#sculpt(dt)
-    if (this.#opts.autoRotate && !this.#reducedMotion && this.#terrain) {
-      this.#angle += dt * 0.03
-      const d = this.#terrain.size * 0.85
-      this.#camera.position.set(Math.sin(this.#angle) * d, d * 0.55, Math.cos(this.#angle) * d)
-      this.#camera.lookAt(0, 0, 0)
-      this.#needsRender = true
+    // D19: the ambient camera turns on every drawn frame, from the renderer's own clock (never reset by a page).
+    if (this.#ambient && this.#vantage) {
+      this.#ambientT = stepAmbientClock(this.#ambientT, raw, this.#reducedMotion)
+      this.#aimAmbient()
     }
     this.#stepCycle(dt)
     this.#stepTransition(dt)
@@ -1560,7 +1848,9 @@ export class WorldRenderer {
 
     // Walk mode and the day/night cycle animate: every frame is drawn, and
     // the frame rate is watched (D12). Orbit view draws on demand.
-    const animating = this.#scenery && (this.#mode === 'walk' || this.#transition !== null || this.#autoCycle)
+    // The ambient view animates (its camera turns, D19) unless motion is reduced: then it is a still that redraws on change.
+    // It counts as animating, so it draws every frame (at most `fpsCap` a second) instead of waiting for requestRender().
+    const animating = this.#scenery && (this.#ambient ? !this.#reducedMotion : this.#mode === 'walk' || this.#transition !== null || this.#autoCycle)
     if (animating) {
       this.#needsRender = true
       if (!this.#reducedMotion) this.#time += dt
