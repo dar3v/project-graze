@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onDestroy, onMount } from 'svelte'
+  import { onDestroy, onMount, type Snippet } from 'svelte'
   import { modelStatus, predictBatch } from '../model/client.ts'
   import { createPredictionSession, predictionStateOf } from '../model/predictionSession.ts'
   import { heightmapToInputs, sampleAt } from '../deps/features.ts'
@@ -16,6 +16,7 @@
   import SimPanel from '../sim/SimPanel.svelte'
   import { liveWorld, livePoses } from '../state/liveWorld.ts'
   import { helpOpen, isTypingTarget } from '../help/help.ts'
+  import { route } from '../router.ts'
   import { probeOpen, selectCell, selectedCell, terrainVersion, viewMode, worldConfig, worldKeyOf, type ViewMode } from '../state/appState.ts'
   import { openSavedWorld, terrainFor, toSavedWorld } from '../state/worldTerrain.ts'
   import { PREDICTION_NOTICE, WORLD_FEATURES } from '../state/worldFeatures.ts'
@@ -25,15 +26,20 @@
   import WorldView from '../world/WorldView.svelte'
 
   interface Props {
-    /**
-     * False while another page is shown. The Sandbox stays mounted then
-     * (App.svelte), so the predictions and the herds keep running behind the
-     * other pages and the world is still there on return (ROLE-1 D14).
-     */
-    active?: boolean
+    /** Top of the right-hand feed: title, badges, section chips. */
+    header?: Snippet
+    /** The feed after the Overview: Model Report, Responsible Use, footer. */
+    children?: Snippet
   }
 
-  let { active = true }: Props = $props()
+  let { header, children }: Props = $props()
+
+  // A new section starts at the top of the feed.
+  let feed: HTMLDivElement | undefined = $state()
+  $effect(() => {
+    void $route
+    feed?.scrollTo(0, 0)
+  })
 
   const DEBOUNCE_MS = 250
 
@@ -157,16 +163,11 @@
   }
 
   function onkeydown(e: KeyboardEvent): void {
-    // Not while another page is shown, and not under the walk panel (a dialog).
-    if (!active || walkExit) return
+    // Not under the walk panel (a dialog).
+    if (walkExit) return
     if (isTypingTarget(e.target) || e.ctrlKey || e.metaKey || e.altKey || $helpOpen) return
     if (e.key === 'v' || e.key === 'V') setMode($viewMode === 'orbit' ? 'walk' : 'orbit')
   }
-
-  // Leaving the page (browser Back while walking) leaves walk mode too.
-  $effect(() => {
-    if (!active && $viewMode === 'walk') viewMode.set('orbit')
-  })
 
   // ---- leaving walk mode: the info and settings panel (ROLE-1 D15) --------
 
@@ -176,8 +177,7 @@
   let herd: HerdSummary | null = $state.raw(null)
 
   function onWalkExit(exit: WalkExit): void {
-    // Only when this page is the one shown: leaving by navigating away opens nothing.
-    if (active) walkExit = exit
+    walkExit = exit
   }
 
   function closeWalkPanel(): void {
@@ -191,17 +191,11 @@
     setMode('walk')
   }
 
-  // A link in the panel (Model Report, Responsible Use) leaves the page: close the panel, keep the world.
-  $effect(() => {
-    if (!active) walkExit = null
-  })
-
   // ---- animal pace (ROLE-1 D16) ---------------------------------------------
 
-  // Ground-level views (walk mode, and the ambient backdrop behind another
-  // page) show the herds at walking pace. Orbit view, and this page's herd
-  // panel, run at full sim speed: the pace follows the view mode.
-  const groundLevel = $derived($viewMode === 'walk' || !active)
+  // Walk mode shows the herds at walking pace. Orbit view and the herd
+  // panel run at full sim speed: the pace follows the view mode.
+  const groundLevel = $derived($viewMode === 'walk')
 
   // ---- terrain controls (write the shared store) -------------------------
 
@@ -307,6 +301,8 @@
   let pendingId: string | null = $state(null)
 
   function onHash(): void {
+    // A link in the walk panel (Model Report, Responsible Use) scrolls the feed: close the panel, keep the world.
+    walkExit = null
     const id = parseWorldHash(location.hash)
     if (id && id !== loadedFrom) pendingId = id
   }
@@ -332,7 +328,8 @@
 
 <svelte:window {onkeydown} />
 
-<section class="section" aria-labelledby="sandbox-title">
+<!-- Left column (layout-refactoring.md): the viewport and its controls stay in view. -->
+<section class="player" aria-labelledby="sandbox-title">
   <!-- Walk mode covers the window: what it covers is inert, so Tab cannot reach it. -->
   <div class="covered" inert={$viewMode === 'walk'}>
   <h2 id="sandbox-title" class="visually-hidden">Sandbox</h2>
@@ -368,13 +365,6 @@
     <SettingsPanel onclose={() => (settingsOpen = false)} />
   {/if}
 
-  <p class="hint muted">
-    {#if $viewMode === 'walk'}
-      Walk the valley you sculpted. The plants are the model's predicted cover type; sparse, grey plants mark low trust. Press E to probe the cell under you, Esc to exit.
-    {:else}
-      Select a cell to probe it. Raise, lower or flatten the ground and the cover map is predicted again in your browser. Right-drag to orbit, scroll to zoom.
-    {/if}
-  </p>
 
   {#if worldNotice}
     <p class="notice warn" role="status">{worldNotice} <button type="button" class="link" onclick={() => (worldNotice = null)}>Dismiss</button></p>
@@ -384,7 +374,6 @@
   <div class="map">
     <WorldView
       bind:this={worldView}
-      shown={active}
       onexit={onWalkExit}
       lookSensitivity={$settings.lookSensitivity}
       invertLookY={$settings.invertLookY}
@@ -439,7 +428,17 @@
   {/if}
 
   <div class="covered" inert={$viewMode === 'walk'}>
-  <p class="world-notice">{PREDICTION_NOTICE}</p>
+  {#if counts && card}
+    <ul class="legend" aria-label="Share of land per predicted cover type">
+      <li class="label">Share of land</li>
+      {#each card.classes as name, i (i)}
+        <li>
+          <span class="sw" style:background={classColor(i)}></span>{name}
+          <span class="pct">{counts.land ? Math.round((counts.out[i] / counts.land) * 100) : 0}%</span>
+        </li>
+      {/each}
+    </ul>
+  {/if}
 
   <p class="status muted" aria-live="polite">
     {#if predictionState === 'unavailable'}
@@ -456,18 +455,6 @@
         : ' · no water on this map'}
     {/if}
   </p>
-
-  {#if counts && card}
-    <ul class="legend" aria-label="Share of land per predicted cover type">
-      <li class="label">Share of land</li>
-      {#each card.classes as name, i (i)}
-        <li>
-          <span class="sw" style:background={classColor(i)}></span>{name}
-          <span class="pct">{counts.land ? Math.round((counts.out[i] / counts.land) * 100) : 0}%</span>
-        </li>
-      {/each}
-    </ul>
-  {/if}
 
   <div class="controls">
     <label>
@@ -496,13 +483,13 @@
         oninput={(e) => worldConfig.update((c) => ({ ...c, waterShare: Number(e.currentTarget.value) / 100 }))}
       />
     </label>
-    <button type="button" onclick={() => terrainVersion.update((v) => v + 1)}>Reset terrain</button>
-    <button type="button" onclick={manualProbe} disabled={!card}>Enter values manually</button>
   </div>
 
   <div class="share" aria-labelledby="share-title">
-    <h3 id="share-title" class="label">Save and share</h3>
+    <h3 id="share-title" class="visually-hidden">Save and share</h3>
     <div class="share-row">
+      <button type="button" onclick={() => terrainVersion.update((v) => v + 1)}>Reset terrain</button>
+      <button type="button" onclick={manualProbe} disabled={!card}>Enter values manually</button>
       <button type="button" onclick={save} disabled={!card || shareState.kind === 'busy'}>Save and get a link</button>
       <button type="button" onclick={copyCode} disabled={!card || shareState.kind === 'busy'} title="A code that holds the whole world. It works without the saved-worlds service.">
         {codeCopied ? 'Code copied' : 'Copy offline code'}
@@ -526,17 +513,34 @@
         <button type="button" class="link" onclick={() => shareState.kind === 'saved' && copyLink(shareState.url)}>{copied ? 'Copied' : 'Copy link'}</button>
       {:else if shareState.kind === 'error'}
         <span class="err">{shareState.message}</span>
-      {:else}
-        Saves the seed, the sliders and your brush edits, plus the model version. No predictions and no personal data. The offline code holds the same world as text and needs no server.
       {/if}
     </p>
   </div>
+  </div>
+</section>
 
-  {#if $probeOpen && card}
+<!-- Right column: title, then the chosen section (Overview, Model Report or Responsible Use). -->
+<div class="feed" bind:this={feed} inert={$viewMode === 'walk'}>
+  {@render header?.()}
+
+  <!-- Hidden, not unmounted, on the other sections: its herd panel runs the sim the canvas draws. -->
+  <section id="overview" class="section" aria-labelledby="overview-title" hidden={$route !== 'sandbox'}>
+    <h2 id="overview-title">Overview</h2>
+  <p class="hint muted">
+    {#if $viewMode === 'walk'}
+      Walk the valley you sculpted. The plants are the model's predicted cover type; sparse, grey plants mark low trust. Press E to probe the cell under you, Esc to exit.
+    {:else}
+      Select a cell to probe it. Raise, lower or flatten the ground and the cover map is predicted again in your browser. Right-drag to orbit, scroll to zoom.
+    {/if}
+  </p>
+    <p class="hint muted">Save and get a link keeps the seed, the sliders and your brush edits, plus the model version. No predictions and no personal data. The offline code holds the same world as text and needs no server.</p>
+    <p class="world-notice">{PREDICTION_NOTICE}</p>
+
+    {#if $probeOpen && card}
     <SiteProbe {card} selection={$selectedCell} onclose={() => probeOpen.set(false)} />
   {/if}
 
-  {#if card && cells}
+    {#if card && cells}
     <SimPanel
       size={GRID}
       cover={map?.cover ?? null}
@@ -549,13 +553,80 @@
       onsummary={(h) => (herd = h)}
     />
   {/if}
-  </div>
-</section>
+  </section>
+
+  {@render children?.()}
+</div>
 
 <style>
+  /* The two columns sit in App.svelte's grid. */
+  .player {
+    position: sticky;
+    top: 0;
+    /* Sticky makes the column a stacking context: lift it above the feed so the full-window walk view covers everything. */
+    z-index: 1;
+    height: 100vh;
+    height: 100dvh;
+    overflow: hidden;
+    padding: 16px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .feed {
+    height: 100vh;
+    height: 100dvh;
+    overflow-y: auto;
+    padding: 24px 28px 48px;
+    scrollbar-width: thin;
+  }
+
+  /* The canvas takes whatever height the controls leave, so the column never scrolls. */
+  .map {
+    flex: 1 1 0;
+    min-height: 0;
+  }
+
+  .map :global(.world-view) {
+    height: 100%;
+    grid-template-rows: minmax(0, 1fr);
+  }
+
+  .map :global(.frame) {
+    aspect-ratio: auto;
+    max-height: none;
+  }
+
+  .feed :global(.section) {
+    margin-top: 40px;
+  }
+
+  @media (max-width: 960px) {
+    .player,
+    .feed {
+      position: static;
+      height: auto;
+      overflow: visible;
+    }
+
+    /* One column: the canvas goes back to its own shape. */
+    .map {
+      flex: none;
+    }
+
+    .map :global(.world-view) {
+      height: auto;
+    }
+
+    .map :global(.frame) {
+      aspect-ratio: 16 / 10;
+      max-height: 52vh;
+    }
+  }
+
   .hint {
-    text-align: center;
-    font-size: 11px;
+    font-size: 12px;
     margin: 14px 0;
   }
 
@@ -586,21 +657,16 @@
     margin-left: 4px;
   }
 
-  .map {
-    margin-top: 8px;
-  }
-
   .world-notice {
-    text-align: center;
     font-size: 11px;
     color: var(--text-2);
-    margin-top: 8px;
+    margin: 8px 0 24px;
   }
 
   .status {
     text-align: center;
     font-size: 11px;
-    margin-top: 6px;
+    margin-top: 4px;
     min-height: 1.6em;
   }
 
@@ -611,7 +677,7 @@
   .legend {
     list-style: none;
     padding: 0;
-    margin: 14px 0 0;
+    margin: 0;
     display: flex;
     flex-wrap: wrap;
     justify-content: center;
@@ -633,9 +699,9 @@
   }
 
   .controls {
-    margin-top: 28px;
+    margin-top: 8px;
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
     gap: 16px;
     align-items: end;
   }
@@ -646,7 +712,7 @@
   }
 
   .share {
-    margin-top: 28px;
+    margin-top: 12px;
     display: grid;
     gap: 8px;
   }
@@ -660,7 +726,7 @@
   .load {
     display: flex;
     gap: 8px;
-    flex: 1 1 260px;
+    flex: 1 1 200px;
     min-width: 0;
   }
 

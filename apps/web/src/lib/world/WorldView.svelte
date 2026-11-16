@@ -619,7 +619,8 @@
     position: relative;
     width: 100%;
     aspect-ratio: 16 / 10;
-    max-height: 70vh;
+    /* About half the pinned left column (layout-refactoring.md), leaving room for the controls. */
+    max-height: 52vh;
   }
 
   .viewport {

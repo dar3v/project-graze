@@ -8,10 +8,6 @@
   import ResponsibleUse from './lib/routes/ResponsibleUse.svelte'
   import HelpOverlay from './lib/help/HelpOverlay.svelte'
   import { helpOpen, isTypingTarget } from './lib/help/help.ts'
-  import { viewMode } from './lib/state/appState.ts'
-
-  // Walk mode covers the window (ROLE-1 D14): the page under it is inert.
-  const walking = $derived($route === 'sandbox' && $viewMode === 'walk')
 
   function onkeydown(e: KeyboardEvent): void {
     if (e.key === '?' && !e.ctrlKey && !e.metaKey && !e.altKey && !isTypingTarget(e.target)) {
@@ -33,153 +29,125 @@
 
 <WorldBackdrop />
 
-<div class="utility" inert={walking}>
-  <button type="button" class="btn" onclick={() => helpOpen.set(true)} title="Controls help (?)" aria-haspopup="dialog">? help</button>
-  <a class="btn" href="#/report" title="Model status. Opens the Model Report.">{statusLabel}</a>
-</div>
-
 <HelpOverlay />
 
-<div class="shell" class:walking>
-  <header inert={walking}>
-    <p class="label eyebrow">CSST 102 · terrain-to-habitat classifier</p>
-    <h1>Graze</h1>
-    <p class="tagline">Sculpt a valley. A model guesses what would grow there.<br />Then see if your herds can live on it.</p>
+<div class="shell">
+  <Sandbox>
+    {#snippet header()}
+      <header>
+        <div class="badges">
+          <button type="button" class="btn" onclick={() => helpOpen.set(true)} title="Controls help (?)" aria-haspopup="dialog">? help</button>
+          <a class="btn" href="#/report" title="Model status. Opens the Model Report.">{statusLabel}</a>
+        </div>
+        <p class="label eyebrow">CSST 102 · terrain-to-habitat classifier</p>
+        <h1>Graze</h1>
+        <p class="tagline">Sculpt a valley. A model guesses what would grow there. Then see if your herds can live on it.</p>
 
-    <nav aria-label="Main">
-      {#each ROUTES as r, i (r.id)}
-        <a class="tab" href={r.hash} aria-current={$route === r.id ? 'page' : undefined}><span class="n">{i + 1}</span> {r.label}</a>
-      {/each}
-    </nav>
-  </header>
+        <nav aria-label="Sections">
+          {#each ROUTES as r (r.id)}
+            <a class="chip" href={r.hash} aria-current={$route === r.id ? 'page' : undefined}>{r.label}</a>
+          {/each}
+        </nav>
+      </header>
 
-  {#if $modelStatus.state === 'error'}
-    <div class="notice error banner" role="alert" inert={walking}>
-      <strong>The model could not be loaded.</strong> Predictions are unavailable. {$modelStatus.message}
-    </div>
-  {/if}
+      {#if $modelStatus.state === 'error'}
+        <div class="notice error banner" role="alert">
+          <strong>The model could not be loaded.</strong> Predictions are unavailable. {$modelStatus.message}
+        </div>
+      {/if}
 
-  <main>
-    <!-- The Sandbox stays mounted behind the other pages (ROLE-1 D14): its
-         terrain, predictions and herds are the world the background draws,
-         and they are still there on return. -->
-    <div hidden={$route !== 'sandbox'}>
-      <Sandbox active={$route === 'sandbox'} />
-    </div>
-    {#if $route === 'sandbox'}
-      <!-- shown above -->
-    {:else if $route === 'report'}
+      {#if $route === 'not-found'}
+        <p class="notice warn banner" role="status">There is no page at this address. <a href="#/">Back to the overview</a>.</p>
+      {/if}
+    {/snippet}
+
+    <!-- One section at a time; the Overview is the Sandbox's own (it stays mounted, see Sandbox.svelte). -->
+    {#if $route === 'report'}
       <ModelReport />
     {:else if $route === 'responsible-use'}
       <ResponsibleUse />
-    {:else}
-      <section class="section">
-        <h2>Not found</h2>
-        <p class="muted">There is no page at this address. <a href="#/">Back to the sandbox</a>.</p>
-      </section>
     {/if}
-  </main>
-
-  <div inert={walking}><Footer /></div>
+    <Footer />
+  </Sandbox>
 </div>
 
 <style>
-  .utility {
-    position: fixed;
-    top: 16px;
-    right: 16px;
-    z-index: 10;
-    display: flex;
-    gap: 6px;
+  /* Two columns (layout-refactoring.md): the sandbox is pinned on the left,
+     the documentation feed scrolls on its own on the right. */
+  .shell {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    grid-template-columns: 1.2fr 1fr;
+    height: 100vh;
+    height: 100dvh;
   }
 
-  .utility .btn {
+  /* Narrow screens: one column, the page scrolls as a whole. */
+  @media (max-width: 960px) {
+    .shell {
+      display: block;
+      height: auto;
+    }
+  }
+
+  .badges {
+    display: flex;
+    justify-content: flex-end;
+    gap: 6px;
+    margin-bottom: 16px;
+  }
+
+  .badges .btn {
     font-size: 10px;
     padding: 5px 10px;
     background: rgba(8, 10, 13, 0.85);
   }
 
-  /* Walk mode is a fixed, full-viewport layer inside the shell: lift the shell
-     above the utility buttons (z-index 10) while it is on. The help dialog
-     (40) still opens over it. */
-  .shell.walking {
-    z-index: 20;
-  }
-
-  .shell {
-    position: relative;
-    z-index: 1;
-    max-width: 760px;
-    margin: 0 auto;
-    padding: 96px 16px 48px;
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
-  }
-
-  header {
-    text-align: center;
-  }
-
   .eyebrow {
-    margin-bottom: 18px;
+    margin-bottom: 12px;
   }
 
   h1 {
-    font-size: clamp(30px, 8vw, 48px);
+    font-size: clamp(26px, 3.2vw, 40px);
     font-weight: 300;
     letter-spacing: 0.36em;
     text-transform: uppercase;
-    margin-right: -0.36em;
     color: var(--text);
   }
 
   .tagline {
-    margin-top: 18px;
-    font-size: 14px;
+    margin-top: 12px;
+    font-size: 13px;
     letter-spacing: 0.04em;
     color: var(--text-2);
   }
 
   nav {
-    margin-top: 48px;
+    margin-top: 24px;
     display: flex;
-    justify-content: center;
     flex-wrap: wrap;
     gap: 8px;
   }
 
-  .tab {
+  .chip {
     font-size: 11px;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
+    letter-spacing: 0.06em;
     color: var(--text-2);
+    background: var(--fill);
     border: 1px solid var(--border);
-    padding: 7px 14px;
+    border-radius: 999px;
+    padding: 6px 14px;
     text-decoration: none;
   }
 
-  .tab:hover {
-    background: var(--fill);
+  .chip:hover,
+  .chip[aria-current='page'] {
     color: var(--text);
-  }
-
-  .tab[aria-current='page'] {
-    background: var(--fill);
-    color: var(--text);
-    border-color: #3a3f45;
-  }
-
-  .n {
-    color: var(--text-3);
-    margin-right: 4px;
+    border-color: var(--text-2);
   }
 
   .banner {
-    margin-top: 40px;
-  }
-
-  main {
-    flex: 1;
+    margin-top: 24px;
   }
 </style>

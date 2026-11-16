@@ -2,10 +2,11 @@ import { readable } from 'svelte/store'
 import { parseWorldHash } from '../../../../packages/worlds/src/index.ts'
 
 /**
- * Hash routes so the static build needs no server-side rewrites.
+ * Hash routes so the static build needs no server-side rewrites. Each route
+ * is one section of the right-hand feed (App.svelte shows one at a time).
  */
 export const ROUTES = [
-  { id: 'sandbox', hash: '#/', label: 'Sandbox' },
+  { id: 'sandbox', hash: '#/', label: 'Overview' },
   { id: 'report', hash: '#/report', label: 'Model Report' },
   { id: 'responsible-use', hash: '#/responsible-use', label: 'Responsible Use' },
 ] as const
@@ -21,14 +22,7 @@ export function parseHash(hash: string): RouteId {
 }
 
 export const route = readable<RouteId>(parseHash(location.hash), (set) => {
-  let current = parseHash(location.hash)
-  const onChange = () => {
-    const next = parseHash(location.hash)
-    // Only scroll on a real page change (opening a world link keeps the Sandbox in place).
-    if (next !== current) window.scrollTo(0, 0)
-    current = next
-    set(next)
-  }
+  const onChange = () => set(parseHash(location.hash))
   window.addEventListener('hashchange', onChange)
   return () => window.removeEventListener('hashchange', onChange)
 })
