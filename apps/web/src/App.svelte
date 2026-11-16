@@ -45,7 +45,7 @@
 
         <nav aria-label="Sections">
           {#each ROUTES as r (r.id)}
-            <a class="chip" href={r.hash} aria-current={$route === r.id ? 'page' : undefined}>{r.label}</a>
+            <a class="btn" href={r.hash} aria-current={$route === r.id ? 'page' : undefined}>{r.label}</a>
           {/each}
         </nav>
       </header>
@@ -130,21 +130,11 @@
     gap: 8px;
   }
 
-  .chip {
-    font-size: 11px;
-    letter-spacing: 0.06em;
-    color: var(--text-2);
-    background: var(--fill);
-    border: 1px solid var(--border);
-    border-radius: 999px;
-    padding: 6px 14px;
-    text-decoration: none;
-  }
-
-  .chip:hover,
-  .chip[aria-current='page'] {
+  /* Same as the active Orbit/Walk button in the Sandbox. */
+  nav .btn[aria-current='page'] {
     color: var(--text);
     border-color: var(--text-2);
+    background: var(--fill);
   }
 
   .banner {
