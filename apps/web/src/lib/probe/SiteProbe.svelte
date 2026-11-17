@@ -17,8 +17,8 @@
   let { card, selection, onclose }: Props = $props()
 
   let values: Record<TerrainSampleKey, string> = $state({ ...emptyForm() })
-  let checked: ValidationResult | null = $state(null)
-  let explanation: Explanation | null = $state(null)
+  let checked = $state<ValidationResult | null>(null)
+  let explanation = $state<Explanation | null>(null)
   let busy = $state(false)
   let runError: string | null = $state(null)
   let requestSeq = 0
