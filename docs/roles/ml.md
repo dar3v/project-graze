@@ -114,8 +114,8 @@ Each item is done only when every checkbox is ticked.
 
 ## Tonight (definition of done)
 
-- [ ] Repo cloned, installed, and running on your machine
-- [ ] D1 complete and committed
+- [x] Repo cloned, installed, and running on your machine
+- [x] D1 complete and committed
 - [x] `docs/notes.md` answers: "Is training in TypeScript going to be a problem?"
 
 This spike is the most important one tonight. If TypeScript training is painful, the team needs to know on Day 1, not Day 6.

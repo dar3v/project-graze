@@ -22,7 +22,10 @@ The code is in good shape. What's left is paperwork, a few decisions, and work o
 | ~~The features README mentions deleted `placeholder.ts` files~~ Done 2026-11-18: it now describes the relative-path imports the consumers use. | `packages/features/README.md:21-24` |
 | ~~The old terrain generator stays for `ml/src/train.ts`~~ Done 2026-11-18: training had already moved to `packages/sim/terrain` (commit `2651b71`), so the generator and its test were deleted. No retrain needed. | `apps/web/src/lib/sandbox/terrain.ts` (deleted) |
 | The rate-limit `namespace: '1001'` is a placeholder copied from the docs. It has to be unique before you deploy. | `cloudflare.config.ts:15` |
-| The knowledge graph was built before the backdrop and `.glb` commit, so it's out of date. Run `/graphify --update` before relying on it for docs. | `graphify-out/` |
+| ~~The knowledge graph is out of date~~ Done 2026-11-18: rebuilt from scratch, and a manifest is saved so later `--update` runs are incremental. | `graphify-out/` |
+| ~~`packages/sim/src/placeholder.ts` is dead code~~ Done 2026-11-18: deleted (nothing imported it). | `packages/sim/src/` (deleted) |
+| The limitations list is in both `README.md` and `docs/limitations.md`, and nothing checks that they match. Edit both together, or keep the list in one place and link to it from the other. | `README.md`, `docs/limitations.md` |
+| `graphify-out/` is partly tracked in git: `graph.json`, `graph.html`, `GRAPH_REPORT.md` and the labels are committed, the cache is ignored. Every rebuild is a large diff. Decide whether to keep committing it or add `graphify-out/` to `.gitignore`. | `.gitignore:40-44` |
 
 ## 2. Decisions the group needs to make
 
@@ -35,6 +38,7 @@ The code is in good shape. What's left is paperwork, a few decisions, and work o
 - **ML interpretation:** the D5 per-class discussion and the D8 conclusions. Two `TODO (humans)` notes are waiting in `docs/model-card.md:132` and `:310`. Two classes make up about 85% of the rows, so be ready to explain why macro-F1 is the metric and not accuracy.
 - **Freeze (D9):** run `ml:evaluate-final` **once**, then commit and tag the model. No tags exist yet. Learn why the test set can only be used once.
 - **Your own wording** for the limitations notice and the other in-app notices. The drafts are done, but the final text has to be yours.
+- **The Model Report's "what these numbers do not mean" section.** The page renders it from the card, but the text must be written by humans (`docs/roles/app-and-sim.md:85`).
 - **Checks by hand that headless testing can't do:**
   - pointer lock and leaving it with Esc;
   - 30+ fps on your weakest laptop, recorded with the machine's name;

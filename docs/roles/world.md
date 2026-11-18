@@ -333,9 +333,9 @@ Walk mode, day/night, and shareable seeds are now in scope: see D8, D10, and D13
 
 ## Tonight (definition of done)
 
-- [ ] Repo cloned, installed, and running on your machine
+- [x] Repo cloned, installed, and running on your machine
 - [x] Seeded terrain mesh rendering with orbit camera, water plane, seed input, and water slider
-- [ ] Committed and pushed
+- [x] Committed and pushed
 
 ---
 
