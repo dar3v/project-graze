@@ -1,19 +1,17 @@
 /**
- * Animals (D6, D9, D17, D18): two instanced low-poly meshes, one herbivore
+ * Animals (D6, D9, D18): two instanced low-poly meshes, one herbivore
  * and one predator, drawn where Role 2's sim says they are. No sim logic
  * here: the renderer gets positions (and headings, when given) in cell
  * coordinates and stands each animal on the ground with the same bilinear
  * height lookup the walker uses.
  *
- * Shapes. The built-in shapes are made of boxes: no models, no assets. A
- * team-made `.glb` can replace either one (`setShapes`, D17). Every shape
- * faces +X at heading 0, built-in or custom.
+ * Shapes. The shapes are made of boxes: no models, no assets. Every shape
+ * faces +X at heading 0.
  *
  * Motion (D18). Legs swing and the body bobs in the vertex shader, so it
  * costs no draw calls and works on hundreds of animals:
  *  - `legMask` (per vertex) says which vertices are legs and which way they
- *    swing: +1 and -1 swing in opposite directions, 0 is the body. The
- *    built-in shapes set it; a custom model authors it as `_LEGMASK`;
+ *    swing: +1 and -1 swing in opposite directions, 0 is the body;
  *  - `aSpeed` (per instance, 0..1) is how fast that animal is moving, filled
  *    in `place()` from the distance it covered since the last poses. An
  *    animal standing still does not walk in place;
@@ -45,8 +43,6 @@ const STRIDE_RATE = 9
 const STALE_POSES_S = 0.35
 
 export type AnimalSlot = 'herbivore' | 'predator'
-/** Custom geometries by slot. A missing slot keeps the built-in shape. */
-export type FaunaShapes = Partial<Record<AnimalSlot, THREE.BufferGeometry>>
 
 /** A box part: `leg` is its legMask (+1 or -1 for a leg, 0 for the body). */
 function box(w: number, h: number, d: number, x: number, y: number, z: number, hex: string, leg = 0): THREE.BufferGeometry {
@@ -139,7 +135,6 @@ export class Fauna {
   readonly #uTime = { value: 0 }
   readonly #uSwing = { value: LEG_SWING }
   #herds: Record<AnimalSlot, Herd>
-  #custom: FaunaShapes = {}
   #posesAt = 0
   #moving = false
 
@@ -152,7 +147,7 @@ export class Fauna {
   }
 
   #material(hip: { value: number }): THREE.MeshLambertMaterial {
-    // Colors are vertex colors: the palette color on the built-in shapes, the painted ones on a custom model.
+    // Colors are vertex colors: the palette color baked into each shape.
     const m = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true })
     m.onBeforeCompile = (shader) => {
       shader.uniforms.uTime = this.#uTime
@@ -195,33 +190,6 @@ export class Fauna {
 
   get count(): number {
     return this.#herds.herbivore.mesh.count + this.#herds.predator.mesh.count
-  }
-
-  /** How many of the 2 animal slots use a custom shape. */
-  get customShapes(): number {
-    return Object.keys(this.#custom).length
-  }
-
-  /**
-   * Use these custom geometries (D17). A slot that is missing goes back to
-   * its built-in shape. The shapes are cloned; the clones are disposed in
-   * `dispose()`. Call `place()` afterwards to fill the new meshes.
-   */
-  setShapes(shapes: FaunaShapes): void {
-    this.#custom = { ...shapes }
-    for (const slot of ['herbivore', 'predator'] as const) {
-      const herd = this.#herds[slot]
-      const geo = shapes[slot]?.clone() ?? (slot === 'herbivore' ? herbivoreGeometry() : predatorGeometry())
-      if (!geo.getAttribute('legMask')) geo.setAttribute('legMask', new THREE.BufferAttribute(new Float32Array(geo.getAttribute('position').count), 1))
-      const capacity = herd.mesh.instanceMatrix.count
-      this.#scene.remove(herd.mesh)
-      herd.mesh.geometry.dispose()
-      herd.mesh.dispose()
-      herd.hip.value = hipHeight(geo)
-      herd.mesh = this.#mesh(geo, herd.material, capacity)
-      herd.last = null
-      herd.lastPoses = null
-    }
   }
 
   /** Scene clock (seconds) for the leg swing, and the wall clock used to notice that the poses stopped. */

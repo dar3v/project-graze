@@ -263,8 +263,7 @@
       {Math.round(perf.fps)} fps · {perf.quality} · {perf.drawCalls} draw calls · {Math.round(perf.triangles / 1000)}k triangles<br />
       {perf.visiblePlants}/{perf.plants} plants in {perf.visiblePlantBatches}/{perf.plantBatches} batches · {perf.grassTufts} tufts · {perf.animals} animals<br />
       {perf.geometries} geometries · {perf.textures} textures · {perf.programs} programs · pixel ratio {perf.pixelRatio}<br />
-      animals: median {perf.animalSpeed.toFixed(1)} cells/s · {animalSpeedLabel}{scaleText}<br />
-      {perf.models}
+      animals: median {perf.animalSpeed.toFixed(1)} cells/s · {animalSpeedLabel}{scaleText}
     </div>
   {/if}
 

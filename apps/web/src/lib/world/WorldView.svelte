@@ -530,7 +530,7 @@
           <div class="busy" aria-live="polite">{busy}</div>
         {/if}
         {#if perf}
-          <div class="orbit-perf">{perf.drawCalls} draw calls · {Math.round(perf.triangles / 1000)}k triangles · {perf.plants} plants · {perf.geometries} geometries · {perf.textures} textures · {perf.programs} programs · {perf.models}</div>
+          <div class="orbit-perf">{perf.drawCalls} draw calls · {Math.round(perf.triangles / 1000)}k triangles · {perf.plants} plants · {perf.geometries} geometries · {perf.textures} textures · {perf.programs} programs</div>
         {/if}
       {/if}
     </div>

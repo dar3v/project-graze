@@ -2,7 +2,7 @@
  * Cell <-> world coordinates for the 3D scene. Three-free so it is unit-tested.
  *
  * One world unit = one cell (30 m). Vertex (x, y) sits at the CENTER of cell
- * (x, y), so animals at cell coordinates (as drawn by the 2D map) land on the
+ * (x, y), so animals at cell coordinates land on the
  * same spot. Grid y = 0 is north = -Z (away from the default camera), +x is
  * east = +X. Heights are exaggerated so a 3.8 km map still reads as a valley.
  */

@@ -119,7 +119,7 @@
         generated valley you are working on. It is not footage of a real place.
       </li>
       <li>
-        Plant and animal shapes are <strong>team-made art, not data</strong>. They are built in code or modelled by hand by the team, with no
+        Plant and animal shapes are <strong>team-made art, not data</strong>. They are built in code by the team, with no
         AI-generated and no downloaded assets. A shape says which class was predicted; it says nothing about what a real tree or animal there
         looks like.
       </li>

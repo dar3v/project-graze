@@ -12,7 +12,7 @@
 | `packages/sim/terrain/` (heightmap generation) | `packages/features/` (Role 3) |
 | `apps/web/src/lib/world/` (three.js scene, brush, overlays) | `ml/` and `model.json` (Role 3) |
 | World-side unit tests | `packages/sim/herd/` and Svelte pages (Role 2) |
-| `apps/web/public/models/` and `world/models.ts` (custom `.glb` files, manifest, loader; see D17) | `WorldBackdrop.svelte`, settings store, Sandbox panels (Role 2; see "Changes needed in ROLE-2") |
+| — | `WorldBackdrop.svelte`, settings store, Sandbox panels (Role 2; see "Changes needed in ROLE-2") |
 
 ---
 
@@ -212,83 +212,68 @@ Library version notes (three 0.187.0 / r187, matched by `@types/three` 0.187.0):
 - `Sky` (`three/addons/objects/Sky.js`) is a WebGL `ShaderMaterial` and works only with `WebGLRenderer`; the WebGPU `SkyMesh` in `three/webgpu` does not. In r187 the shader has built-in procedural clouds (`cloudCoverage`, `cloudDensity`, `cloudSpeed`, `time`) and a night-sky term, so D9/D10 need no cloud texture asset.
 - `Water` (`three/addons/objects/Water.js`) is also WebGL-only (`WaterMesh` is the WebGPU variant). It needs a `waterNormals` texture for ripples: generate it procedurally or hand-author it, since we use no AI-generated assets. It re-renders the scene into a reflection target every frame, which costs draw calls; if the D12 frame-rate target is at risk, use a cheaper custom shader plane instead.
 - `THREE.LOD`, `THREE.Fog` / `FogExp2`, and `THREE.InstancedMesh` are core, not addons. An `InstancedMesh` has one bounding sphere for all instances, so split vegetation into chunks for D9 distance culling, set `instanceMatrix.needsUpdate` after placement, and use `setColorAt()` / `instanceColor` for the per-class tints.
-- `GLTFLoader` is `three/addons/loaders/GLTFLoader.js` and `mergeGeometries` is `three/addons/utils/BufferGeometryUtils.js`. Check both against r187 before D17. A `SkinnedMesh` cannot be instanced, so animated rigs are not used for the herd (see D18).
+- `mergeGeometries` is `three/addons/utils/BufferGeometryUtils.js`. A `SkinnedMesh` cannot be instanced, so animated rigs are not used for the herd (see D18).
 - Color management is on by default in 0.187.0 (`renderer.outputColorSpace` is `THREE.SRGBColorSpace`). Author the D9 palette file in sRGB hex so class tints, sky, fog, and water agree.
 
 ## Extended scope, round 2 (D14-D21)
 
-*Added 2026-11-15. Design change: the app's background becomes the walk-mode view, walk mode gets an exit button and an info panel, animals slow down to walking pace, and the visuals open up to team-made `.glb` files.*
+*Added 2026-11-15. Design change: the app's background becomes the walk-mode view, walk mode gets an exit button and an info panel, animals slow down to walking pace, and the visuals open up to team-made `.glb` files. The `.glb` part (D17) was dropped on 2026-11-18.*
 
 None of this changes the shared contract (heightmap, cover map, model output). D14-D16 need changes in Role 2's files; they are listed under "Changes needed in ROLE-2" below. Day 12 freeze, Day 13 captures and Day 14 buffer stay where they are.
 
 ### D14. Ambient backdrop is the walk view
 Every page sits on a dimmed, live, ground-level view of the world. Walk mode lifts the dim and hands the view to the player.
 
-- [ ] **Spike first (half a day), result recorded here:** how the one world is drawn behind the pages and in walk mode.
+- [x] **Spike first (half a day), result recorded here:** how the one world is drawn behind the pages and in walk mode.
   - Option A: walk mode runs on the backdrop's renderer, which takes over input; the Sandbox's `WorldView` keeps orbit, brush and overlays.
   - Option B: the backdrop is its own ambient scene, and walk mode in `WorldView` becomes full-viewport.
+  - **Result: option B.** The backdrop is its own ambient renderer (`mountWorld` in `world/index.ts`, mounted by `WorldBackdrop.svelte`) and walk mode stays in `WorldView`, full-viewport. Reason: the Sandbox keeps its orbit, brush and overlays untouched and the backdrop never needs input. Cost: the backdrop draws 26-33 draw calls at the `low` preset, capped at 30 fps (see "Measurements").
   - Pick one and record the reason and the measured cost (draw calls, GPU resources, fps). The acceptance rule is the same for both: only one renderer draws at a time, the other stops its frame loop and frees its plants and shadow map, and the D12 cleanup counts stay flat.
   - **Amended by D19 (2026-11-15, team decision):** the backdrop keeps drawing on the Sandbox while the orbit view is on screen, so its camera never stops; both renderers draw there. Walk mode still takes the view alone: the backdrop stops its loop and frees its plants and shadow map. The Sandbox view still stops when it is off screen.
-- [ ] The spinning orbit map is removed from the backdrop (`autoRotate` off, no overview camera).
-- [ ] Ambient camera stands at `EYE_HEIGHT` on a seeded vantage on dry land, rides `getGroundHeight`, and turns continuously (see D19). No travel.
-- [ ] The backdrop draws the walk look: sky, fog, shadows, water, plants, grass and animals, from the same live heightmap, cover map, OOD array and sim poses. This replaces the old "no sky, plants or shadows" backdrop rule; update the "Render on demand" note in `world/README.md`.
-- [ ] Day/night keeps running behind every page. The backdrop reads the shared `timeOfDay` and `autoCycle`, and auto-cycle defaults to on (Role 2 default change). With reduced motion the time is frozen at its current value and the sky is still drawn at that time. The camera rotation is not part of this: see D19.
-- [ ] Dim layer: `DIM_IDLE` (0.72 today) on every page when not walking, `DIM_WALK` = 0 in walk mode. One flat, uniform layer with no fade and no gradient (see D20). Both constants live in one place and are documented. *(done under D20: `DIM_IDLE` is now 0.84)*
-- [ ] **Contrast:** secondary text (#8a9098) and body text keep at least 4.5:1 against the brightest backdrop frame (noon, clear sky, bright slope) on all three pages. Measure by sampling the rendered frame behind the text. If it fails, raise `DIM_IDLE` for the whole page; no gradient behind the content column (D20). Do not lower the text contrast.
-- [ ] Idle cost: at most the `low` preset (no grass, short draw distance), capped at 30 fps, stopped while the tab is hidden, `low` by default on narrow screens (390 px). If the frame-rate guard fires, stop the cycle first, then freeze to a still frame.
-- [ ] Graceful states: no cover map yet means terrain, sky and water only, and plants appear when predictions arrive. No WebGL 2 means the page stays black, as today. An empty world or a failed model never blocks the pages. The first frame fades in rather than popping.
-- [ ] Pointer events: outside walk mode the backdrop ignores clicks, so pages stay clickable. In walk mode it takes pointer and touch input.
-- [ ] Walk mode is entered from the Sandbox only (toggle, `V`, "Walk here"). Other pages show the dimmed ambient view and nothing else.
-- [ ] Checks: unit test for the dim state machine (idle and walk, instant switch); headless Firefox at 390 px and 1100 px; no console errors on a fresh load; 5 page switches and 5 walk toggles with flat geometry, texture and program counts.
+- [x] The spinning orbit map is removed from the backdrop (`autoRotate` off, no overview camera). *(no `autoRotate` left in `world/`; the ambient renderer has no orbit view)*
+- [x] Ambient camera stands at `EYE_HEIGHT` on a seeded vantage on dry land, rides `getGroundHeight`, and turns continuously (see D19). No travel. *(`ambient.ts`; unit tests "ambient vantage" and "ambient turn")*
+- [x] The backdrop draws the walk look: sky, fog, shadows, water, plants, grass and animals, from the same live heightmap, cover map, OOD array and sim poses. This replaces the old "no sky, plants or shadows" backdrop rule; update the "Render on demand" note in `world/README.md`. *(done; the README has a "The backdrop" note)*
+- [x] Day/night keeps running behind every page. The backdrop reads the shared `timeOfDay` and `autoCycle`, and auto-cycle defaults to on (Role 2 default change). With reduced motion the time is frozen at its current value and the sky is still drawn at that time. The camera rotation is not part of this: see D19. *(auto-cycle default on: settings test; reduced motion: see D19)*
+- [x] Dim layer: `DIM_IDLE` (0.72 today) on every page when not walking, `DIM_WALK` = 0 in walk mode. One flat, uniform layer with no fade and no gradient (see D20). Both constants live in one place and are documented. *(done under D20: `DIM_IDLE` is now 0.84)*
+- [x] **Contrast:** secondary text (#8a9098) and body text keep at least 4.5:1 against the brightest backdrop frame (noon, clear sky, bright slope) on all three pages. Measure by sampling the rendered frame behind the text. If it fails, raise `DIM_IDLE` for the whole page; no gradient behind the content column (D20). Do not lower the text contrast. *(done under D20)*
+- [x] Idle cost: at most the `low` preset (no grass, short draw distance), capped at 30 fps, stopped while the tab is hidden, `low` by default on narrow screens (390 px). If the frame-rate guard fires, stop the cycle first, then freeze to a still frame. *(`ambient.ts`: `AMBIENT_QUALITY`, `AMBIENT_FPS_CAP` 30, `NARROW_SCREEN_PX` 480, `nextAmbientFallback`; unit-tested. Hidden tab: `visibilitychange`)*
+- [x] Graceful states: no cover map yet means terrain, sky and water only, and plants appear when predictions arrive. No WebGL 2 means the page stays black, as today. An empty world or a failed model never blocks the pages. The first frame fades in rather than popping. *(in the code: `WorldBackdrop.svelte` fades in, `world/README.md` documents the WebGL 2 case. Not every state was exercised headless)*
+- [x] Pointer events: outside walk mode the backdrop ignores clicks, so pages stay clickable. In walk mode it takes pointer and touch input. *(option B: the backdrop is always `pointer-events: none`, and walk input goes to `WorldView`)*
+- [x] Walk mode is entered from the Sandbox only (toggle, `V`, "Walk here"). Other pages show the dimmed ambient view and nothing else. *(only `WorldView`, on the Sandbox, has a walk mode)*
+- [ ] Checks: unit test for the dim state machine (idle and walk, instant switch); headless Firefox at 390 px and 1100 px; no console errors on a fresh load; 5 page switches and 5 walk toggles with flat geometry, texture and program counts. *(partly: dim unit tests, and the headless 390 px / 1100 px runs with no console errors under D19. The 5 switches and 5 toggles count check is still open)*
 
 ### D15. Leaving walk mode: exit button and info and settings panel
-- [ ] A visible "Exit walk mode" button in the walk HUD, in the app's style (mono caps, 1 px border), touch target at least 44 × 44 px, clear of the joystick and minimap, and inside the safe-area insets.
-- [ ] Under desktop pointer lock the cursor is hidden and cannot click the button. While locked, the HUD shows "Esc to exit" beside it. The button works whenever the pointer is free: unlocked, keyboard fallback, touch.
-- [ ] Every exit path (button, Esc, `V`, lock lost) does the same thing: return to orbit view, keep the walker's position and heading, and call a new `onexit(reason)` prop. The Sandbox then opens the **Walk info and settings** panel. "Resume walking" returns to the same spot.
-- [ ] The walker is placed on the nearest dry, walkable cell after a re-seed or a terrain edit under it, never in water deeper than `WADE_DEPTH_M` and never outside the map. Unit-tested on a tiny heightmap.
-- [ ] `onexit` payload gives Role 2 what the panel needs: reason, walker cell, and the predicted class, confidence and low-trust flag of the cell last stood on.
-- [ ] Panel content (Role 2 builds it; the wording is human-written, like the other notices):
+- [x] A visible "Exit walk mode" button in the walk HUD, in the app's style (mono caps, 1 px border), touch target at least 44 × 44 px, clear of the joystick and minimap, and inside the safe-area insets.
+- [x] Under desktop pointer lock the cursor is hidden and cannot click the button. While locked, the HUD shows "Esc to exit" beside it. The button works whenever the pointer is free: unlocked, keyboard fallback, touch.
+- [x] Every exit path (button, Esc, `V`, lock lost) does the same thing: return to orbit view, keep the walker's position and heading, and call a new `onexit(reason)` prop. The Sandbox then opens the **Walk info and settings** panel. "Resume walking" returns to the same spot.
+- [x] The walker is placed on the nearest dry, walkable cell after a re-seed or a terrain edit under it, never in water deeper than `WADE_DEPTH_M` and never outside the map. Unit-tested on a tiny heightmap. *("settleWalker" tests)*
+- [x] `onexit` payload gives Role 2 what the panel needs: reason, walker cell, and the predicted class, confidence and low-trust flag of the cell last stood on. *(`readCell`; unit test)*
+- [x] Panel content (Role 2 builds it; the wording is human-written, like the other notices):
   - **Info:** the controls; the cell last stood on (cover type, confidence, low-trust flag); "vegetation is a rendering of predicted classes, not photographs or ground truth"; scale (a diorama, one cell is 30 m, the walker is a giant); day/night is cosmetic and is not the hillshade feature; the animal pace note (D16); herd counts and rewilding score; links to the Model Report and Responsible Use.
   - **Settings:** quality preset, time of day and auto-cycle, animal speed (D16), mouse sensitivity, invert look Y, field of view, reduced motion, show low trust.
-- [ ] New `WorldView` props for the three new settings: `lookSensitivity`, `invertLookY` and `fov`. Defaults reproduce today's behaviour; the field-of-view range is chosen and documented; stored through Role 2's settings store.
-- [ ] Panel accessibility: focus moves into the panel when it opens and returns to "Walk here" when it closes, every control has a label, and it is fully keyboard operable. The help overlay lists exit and resume.
-- [ ] Checks: at 390 px, walk, exit, change quality and time of day, resume, and the change shows with no reload; Model Report and Responsible Use links work from the panel and the world is still there on return; no console errors.
+- [x] New `WorldView` props for the three new settings: `lookSensitivity`, `invertLookY` and `fov`. Defaults reproduce today's behaviour; the field-of-view range is chosen and documented; stored through Role 2's settings store. *(`WALK_FOV_RANGE` 50-100°, `LOOK_SENSITIVITY_RANGE` 0.25-3 in `walk.ts`)*
+- [x] Panel accessibility: focus moves into the panel when it opens and returns to "Walk here" when it closes, every control has a label, and it is fully keyboard operable. The help overlay lists exit and resume. *(`WalkPanel.svelte` is a modal dialog with a focus trap)*
+- [ ] Checks: at 390 px, walk, exit, change quality and time of day, resume, and the change shows with no reload; Model Report and Responsible Use links work from the panel and the world is still there on return; no console errors. *(hand check, still open)*
 
 ### D16. Animal pace in walk mode
-- [ ] Default: in ground-level views (walk mode and the ambient backdrop), herbivores and predators move at about the walker's speed. The typical moving speed is `ANIMAL_PACE` (0.9) × `WALK_SPEED`. The default only ever slows the sim down, never speeds it up: `paceScale = min(1, ANIMAL_PACE × WALK_SPEED / medianMovingSpeed)`.
-- [ ] `paceScale` is computed from the rules in `ecology.json`, not hand-set, so editing the rules keeps the pace right. Role 2 implements it in the sim clock; Role 1 owns `ANIMAL_PACE` and shows the measured speed in the `P` readout.
-- [ ] "Animal speed" control: **Match walker** (default), 2×, 4×, Full sim speed, Paused. In Settings and in the D15 panel, plus a key that cycles it (listed in help). The choice is remembered per viewer (storage in try/catch).
-- [ ] Orbit view and the Sandbox sim panel run at full sim speed. The pace follows the view mode.
-- [ ] Determinism is untouched: the same seed and the same number of ticks give the same state at any speed; only the wall-clock tick rate changes. Role 2 unit test (N ticks at 1× and at 0.25× compare equal).
-- [ ] Slowing the clock also slows breeding, starvation, the chart and the score per real second. The UI says so next to the control.
-- [ ] Still smooth at the slowest setting: interpolation between ticks, no stepping, headings do not snap. Reduced motion keeps snapping to ticks.
-- [ ] Animals still obey water and terrain through `getGroundHeight`. Running (`RUN_SPEED` 7) outpaces animals; that is intended.
-- [ ] `P` readout adds: median animal speed in cells per second and the current multiplier.
+- [x] Default: in ground-level views (walk mode and the ambient backdrop), herbivores and predators move at about the walker's speed. The typical moving speed is `ANIMAL_PACE` (0.9) × `WALK_SPEED`. The default only ever slows the sim down, never speeds it up: `paceScale = min(1, ANIMAL_PACE × WALK_SPEED / medianMovingSpeed)`.
+- [x] `paceScale` is computed from the rules in `ecology.json`, not hand-set, so editing the rules keeps the pace right. Role 2 implements it in the sim clock; Role 1 owns `ANIMAL_PACE` and shows the measured speed in the `P` readout.
+- [x] "Animal speed" control: **Match walker** (default), 2×, 4×, Full sim speed, Paused. In Settings and in the D15 panel, plus a key that cycles it (listed in help). The choice is remembered per viewer (storage in try/catch). *(key `G`)*
+- [x] Orbit view and the Sandbox sim panel run at full sim speed. The pace follows the view mode.
+- [x] Determinism is untouched: the same seed and the same number of ticks give the same state at any speed; only the wall-clock tick rate changes. Role 2 unit test (N ticks at 1× and at 0.25× compare equal).
+- [x] Slowing the clock also slows breeding, starvation, the chart and the score per real second. The UI says so next to the control.
+- [x] Still smooth at the slowest setting: interpolation between ticks, no stepping, headings do not snap. Reduced motion keeps snapping to ticks. *(`interpolatePoses` tests; not judged by eye)*
+- [x] Animals still obey water and terrain through `getGroundHeight`. Running (`RUN_SPEED` 7) outpaces animals; that is intended.
+- [x] `P` readout adds: median animal speed in cells per second and the current multiplier.
 
-### D17. Custom `.glb` models
-Level A of `docs/custom-models.md` (vertex colours, no textures) is the target. The agent draft `custom-design-guide.md` moves into `docs/` and is corrected to match what is built.
-
-- [ ] Ownership agreed with Role 2: Role 1 owns `apps/web/public/models/` and `world/models.ts`.
-- [ ] `apps/web/public/models/manifest.json` ships from the start, with every slot empty. A missing file therefore never produces a 404 in the console. Each entry: `{ file, author, source: "team-made", version }`. Slots: the 7 plant silhouettes (names from `SPECIES`), `grassTuft`, `herbivore`, `predator`.
-- [ ] `world/models.ts` loads with `GLTFLoader` and, per mesh, bakes the world matrix, makes it non-indexed, sets `tintMask` to 1 for materials named `crown*` and 0 for `trunk*`, `bark*` and everything else, fills `color` from vertex colours or the material colour, unifies the attributes, and merges into one geometry per slot.
-- [ ] Swap-in: `Flora` and `Fauna` take a `Record<slot, BufferGeometry>` that starts with today's code-built shapes. Loaded shapes replace them when they arrive, and a failed slot keeps its default (404, parse error, over budget, bad attributes). The world always renders. A failure is one console warning, not an error.
-- [ ] Validation at load and in the checker: triangle budget (tree or shrub up to 60, grass tuft up to 6, animal up to 200), file size (100 KB each, 1 MB in total), at least one mesh, required attributes, origin at the base (lowest point at Y ≈ 0), plausible height (trees about 1-1.4 units, shrubs about 0.3, animals about 0.5 long), and no skins or animations in instanced slots. Rejections name the file and the reason.
-- [ ] `P` readout adds a models line, for example: `models: 7/10 custom, 3 default; spire.glb rejected: 74 triangles > 60`.
-- [ ] `pnpm models:check` runs the same validation on `apps/web/public/models/` without a browser (for CI) and prints a table. It fails when `author` or `source: "team-made"` is missing.
-- [ ] Provenance: no AI-generated assets (the D9 rule stays), and no downloaded libraries without a team decision. Each file has a line in `apps/web/public/models/CREDITS.md`.
-- [ ] Animal facing: models face +X, and a unit test on a tiny asymmetric mesh checks that heading turns +X toward the direction of travel.
-- [ ] The low-trust rule still works with custom shapes: an OOD plant from a custom model is sparse and grey (a test checks `tintMask`), and low-trust plants still look grey in the `P` check.
-- [ ] Resources: loaded geometries are disposed in `Flora.dispose()` / `Fauna.dispose()`; the loader caches, so 5 walk/orbit toggles do not reload files and the geometry, texture and program counts stay flat.
-- [ ] Re-measure draw calls, triangles and plant counts with the full custom set on all three presets and record them in "Measurements"; update the D9 asset line and the `world/README.md` file table.
-- [ ] Dev loop: edit a `.glb` in `public/models/`, reload, and it shows with no code change. Documented in `docs/custom-models.md` with the Blender export settings (glTF Binary, +Y up, apply transforms and modifiers, flat shading, vertex colours on).
-- [ ] OPTIONAL: a dev-only model preview (`?models=preview`) that shows all 10 slots on neutral ground at large size, plus the 32 px silhouette test from the guide.
-- [ ] OPTIONAL: level B, the palette atlas texture from the guide. Only after level A works; the texture is disposed with the model and the tint mask is kept.
+### D17. Custom `.glb` models (DROPPED)
+*Dropped 2026-11-18: the team is not making custom models. The loader, the manifest, `public/models/` and `pnpm models:check` were removed. Plants and animals are the code-built shapes in `world/flora.ts` and `world/fauna.ts`. The animal facing and leg tests moved to `apps/web/test/fauna.test.ts`.*
 
 ### D18. Motion and polish extras (OPTIONAL, cut first after D13)
-- [ ] Wind sway on plants and grass: vertex shader displacement driven by the shared `uTime`, a per-plant phase from the instance position, stronger on grass. No new draw calls, one extra shader program, off with reduced motion, still shadows (guide 8.3).
-- [ ] Animal leg swing and body bob: a custom `_LEGMASK` vertex attribute authored in the `.glb` (r187's loader should expose it as lowercase `_legmask`; verify), a per-instance phase, and a per-instance speed attribute filled in `Fauna.place()` so animals standing still stop walking in place (guide 8.4).
-- [ ] Ground detail texture in `terrainMaterial.ts`, procedural, multiplied in only when `uNatural` is 1, so overlay colors stay exact.
-- [ ] No frame or draw-call regression on the `P` readout, and the toggle check stays flat.
+- [x] Wind sway on plants and grass: vertex shader displacement driven by the shared `uTime`, a per-plant phase from the instance position, stronger on grass. No new draw calls, one extra shader program, off with reduced motion, still shadows. *(`flora.ts`: `PLANT_SWAY`, `GRASS_SWAY`, `setSway`, off with reduced motion)*
+- [x] Animal leg swing and body bob: a `legMask` vertex attribute set by the built-in shapes, a per-instance phase, and a per-instance speed attribute filled in `Fauna.place()` so animals standing still stop walking in place. *(`fauna.ts`: `legMask`, `aSpeed`, `setSwing`; legs tested in `fauna.test.ts`)*
+- [x] Ground detail texture in `terrainMaterial.ts`, procedural, multiplied in only when `uNatural` is 1, so overlay colors stay exact. *(`groundDetailTexture`; unit test "ground detail")*
+- [ ] No frame or draw-call regression on the `P` readout, and the toggle check stays flat. *(the D21 re-measure includes D18: 54 draw calls on medium in walk mode. The toggle count check is still open, as under D14)*
 
 ### D19. Backdrop camera never stops rotating
 Amends the D14 camera item. The camera keeps turning the whole time, on the hero page and every other page.
@@ -320,7 +305,7 @@ Amends the D14 dim item. The dim becomes one flat layer: no fade in time and no 
 - [x] Shrubs (Krummholz) and grass tufts keep their own density, so the plains are not bare. Grass covers the open ground. *(`Species.patchy` is false for Krummholz; grass placement is unchanged and covers every dry cell near the walker (medium: 2,987 tufts). Note: the shipped model predicted no Krummholz on the 10 measured worlds)*
 - [x] Same seed and same cover map give the same patches (unit test on a tiny cover map). A test also checks the plains fraction: more than half the land cells have no tree. *(`apps/web/test/walk.test.ts`. Measured on 10 real worlds: 83% of land cells have no tree)*
 - [x] Applies to the ambient backdrop, orbit "Terrain and vegetation" and walk mode alike. The three quality presets scale the patch density instead of changing the pattern, so low and high show the same layout. *(one `placeVegetation` call in `scene.ts` serves all three views. Seed 7: 33.7% / 33.6% / 33.6% of the old count on low / medium / high; a test checks the same share of trees stands in the patches on every preset)*
-- [x] Re-measure draw calls, triangles and plant counts on all three presets, then update the "Measurements" table. Counts should drop, which gives headroom for the D17 custom models. *(see "Measurements". Medium: 54 draw calls and 82k triangles in walk mode, down from 56-66 and 154-215k)*
+- [x] Re-measure draw calls, triangles and plant counts on all three presets, then update the "Measurements" table. Counts should drop. *(see "Measurements". Medium: 54 draw calls and 82k triangles in walk mode, down from 56-66 and 154-215k)*
 - [ ] Check by eye in walk mode that each class can still be told apart from the plants nearby, and that patches don't read as a regular grid. *(partly: on an orbit frame of seed 7 the patches are irregular and do not read as a grid, and two walk frames show tree clusters on grassy plains. Telling every class apart on foot needs a person at a screen)*
 
 ### Changes needed in ROLE-2
@@ -330,21 +315,19 @@ Mirror these in `docs/roles/app-and-sim.md`.
 2. Settings store: auto-cycle default on; add `lookSensitivity`, `invertLookY`, `fov` and `animalSpeed`; keep working with empty, corrupt, blocked and full storage (tests).
 3. Sandbox: open the Walk info and settings panel from `onexit`, with Resume; add exit and resume to the help overlay; pass the new `WorldView` props.
 4. Sim clock: a time scale, `paceScale` computed from `ecology.json`, the median-speed helper, the determinism test, and the "slows the whole ecosystem" note next to the control.
-5. Responsible Use / About (agent draft, human final): the background is a rendering of predicted classes and not a real place; custom models are team-made art, not data.
-6. Hand `apps/web/public/models/` to Role 1.
+5. Responsible Use / About (agent draft, human final): the background is a rendering of predicted classes and not a real place.
 
 ### Gaps found while writing this section
 - Pointer lock hides the cursor, so a clickable exit button alone is not enough on desktop; D15 covers it with the "Esc to exit" hint.
 - A brightly lit backdrop can break the 4.5:1 text rule, so D14 has a contrast check at noon.
 - Two WebGL scenes at once (backdrop plus Sandbox) would double GPU memory, so D14 starts with a spike.
 - Slowing animals also slows the ecosystem, and the UI has to say so (D16).
-- An optional `.glb` that 404s would log a console error, so the manifest always ships (D17).
 - Not scheduled, in case there is time: animals that notice or avoid the walker (a sim rule, Role 2), and ambient sound (already in Stretch).
 
 ### Stretch (only if everything else is frozen by Day 10)
 Walk mode, day/night, and shareable seeds are now in scope: see D8, D10, and D13.
 - Ambient soundscape, composed and recorded by the team (no AI-generated assets)
-- Photo mode: hide the HUD and capture a still
+- Photo mode: hide the HUD and capture a still *(built: `C` or the Photo button saves the canvas as a PNG, so the HUD is never in it)*
 
 ---
 
@@ -382,7 +365,6 @@ they are.
 | First (target) | D8 walk mode core, then D9 landscape visuals |
 | Next (target) | D10 day/night, D11 walk HUD, D12 performance and quality |
 | Then (target) | D14 ambient backdrop (spike first), D15 exit button and panel, D16 animal pace |
-| After that (target) | D17 custom `.glb` models (level A) |
 | Optional | D18 motion extras |
 | Fixes (target) | D19 camera keeps rotating, D20 flat dim, D21 sparse trees |
 | Last (target) | D13 save / load / share (OPTIONAL, first cut) |
@@ -393,11 +375,10 @@ they are.
 
 1. D13 (save / load / share; OPTIONAL)
 2. D18 (sway, leg swing, ground texture; OPTIONAL)
-3. D17 extras: model preview, level B texture, grass and animal slots (keep the 7 plant slots)
-4. Day/night auto-cycle (keep a fixed time of day and the slider)
-5. Minimap
-6. Vegetation detail (grass tufts, ground scatter)
-7. Lower quality presets (drop low / medium, keep high)
+3. Day/night auto-cycle (keep a fixed time of day and the slider)
+4. Minimap
+5. Vegetation detail (grass tufts, ground scatter)
+6. Lower quality presets (drop low / medium, keep high)
 
 **Never cut:** the OOD overlay, the brush, the cover overlay, D8 (walk mode core), the D15 exit button, the D14 rule of one renderer drawing at a time (as amended by D19: in walk mode only the walk view draws), the D14 text contrast check, and the D12 cleanup checks (dispose on exit, no memory growth after 5 toggles, no console errors).
 
@@ -415,7 +396,6 @@ they are.
 - Why the background is the walk view, how it is dimmed, and why only one renderer draws at a time (D14)
 - Why the exit button needs an "Esc to exit" hint under pointer lock, and what survives an exit (D15)
 - Why animals are slowed to about the walker's speed, how `paceScale` is computed from `ecology.json`, and why determinism is unaffected (D16)
-- How a `.glb` becomes an instanced plant (tint mask, budgets, fallback) and why only team-made assets are allowed (D17)
 
 ---
 
@@ -432,5 +412,5 @@ they are.
 | Role | Needed |
 | --- | --- |
 | Role 2 (App and Sim) | The Sandbox wiring is done (2026-11-15): `Sandbox.svelte` passes every `WorldView` prop in `docs/app-state.md`, and the flags in `state/worldFeatures.ts` are all true. Please review that change in your files (`Sandbox.svelte`, `worldFeatures.ts`, `HelpOverlay.svelte`), then tick your D9 and D11 items that were waiting on walk mode. The offline share code is new: say if you want it documented differently in `docs/worlds-api.md`. |
-| Role 2, round 2 | Six changes listed under "Changes needed in ROLE-2" (D14-D17): backdrop wiring, settings, the Walk info panel, sim pace, wording, and handing over `public/models/`. Please reply with what you accept. |
-| Role 3 (ML) | Nothing new. D17 does not touch the model files. |
+| Role 2, round 2 | Five changes listed under "Changes needed in ROLE-2" (D14-D16): backdrop wiring, settings, the Walk info panel, sim pace and wording. Please reply with what you accept. |
+| Role 3 (ML) | Nothing new. |

@@ -12,17 +12,11 @@
  *   attribute `tintMask` (1 on the crown, 0 on the trunk) keeps the trunk
  *   its bark color.
  *
- * - Shapes are swappable (D17). `Flora` starts with the code-built shapes
- *   below; `setShapes()` hands it team-made geometries from `./models.ts`,
- *   which replace the matching slots the next time the plants are built. A
- *   slot with no custom shape keeps its code-built one.
  * - Wind sway (D18) is a vertex-shader displacement on the same material: no
  *   extra draw calls, driven by the scene clock, off with reduced motion.
  *
  * Everything created here is disposed by `dispose()`, which the renderer
- * calls when the vegetation is no longer shown (D12). Custom shapes are
- * CLONED when the plants are built and the clones are disposed with the rest,
- * so the loaded model set itself is never touched and never reloaded.
+ * calls when the vegetation is no longer shown (D12).
  */
 
 import * as THREE from 'three'
@@ -34,9 +28,6 @@ import { PALETTE } from './palette.ts'
 import { sampleHeight } from './terrain.ts'
 import { CHUNK_CELLS, chunkInRange, PLANT_STRIDE, SPECIES } from './vegetation.ts'
 import type { PlantBatch, Silhouette } from './vegetation.ts'
-
-/** Custom geometries by slot (the 7 silhouettes and the grass tuft). Missing slots keep the code-built shape. */
-export type FloraShapes = Partial<Record<Silhouette | 'grassTuft', THREE.BufferGeometry>>
 
 /** Sway of a plant's top, world units per unit of height squared (a 1.4-unit tree tip moves about 0.04). */
 export const PLANT_SWAY = 0.02
@@ -223,34 +214,12 @@ export class Flora {
   #grass: THREE.InstancedMesh | null = null
   #grassCapacity = 0
   #castShadow = true
-  #shapes: FloraShapes = {}
   readonly #uTime = { value: 0 }
   readonly #plantSway = { value: PLANT_SWAY }
   readonly #grassSway = { value: GRASS_SWAY }
 
   constructor(scene: THREE.Scene) {
     this.#scene = scene
-  }
-
-  /**
-   * Use these custom geometries (D17) from now on. The plants and the grass
-   * that exist are freed, because their meshes hold the old shapes: the
-   * caller builds them again (`setPlants`, `setGrass`). Returns true when
-   * something has to be rebuilt.
-   */
-  setShapes(shapes: FloraShapes): boolean {
-    this.#shapes = { ...shapes }
-    const had = this.hasPlants || this.#grass !== null
-    this.#clearPlants()
-    this.disposeGrass()
-    this.#geometries?.forEach((g) => g.dispose())
-    this.#geometries = null
-    return had
-  }
-
-  /** How many of the 8 flora slots use a custom shape. */
-  get customShapes(): number {
-    return Object.keys(this.#shapes).length
   }
 
   /** Scene clock for the wind sway (seconds). */
@@ -272,8 +241,7 @@ export class Flora {
   setPlants(batches: readonly PlantBatch[], heightmap: Float32Array, frame: Frame): void {
     this.#clearPlants()
     if (batches.length === 0) return
-    // A custom shape is cloned, so disposing the plants never touches the loaded model set.
-    this.#geometries ??= SPECIES.map((s) => this.#shapes[s.silhouette]?.clone() ?? SILHOUETTES[s.silhouette]())
+    this.#geometries ??= SPECIES.map((s) => SILHOUETTES[s.silhouette]())
     this.#material ??= tintedMaterial(THREE.FrontSide, { uTime: this.#uTime, uSway: this.#plantSway })
     const m = new THREE.Matrix4()
     const q = new THREE.Quaternion()
@@ -331,7 +299,7 @@ export class Flora {
       const old = this.#grass
       this.#grassCapacity = Math.max(n, this.#grassCapacity * 2, 512)
       this.#grass = new THREE.InstancedMesh(
-        old?.geometry ?? this.#shapes.grassTuft?.clone() ?? tuftGeometry(),
+        old?.geometry ?? tuftGeometry(),
         old?.material ?? tintedMaterial(THREE.DoubleSide, { uTime: this.#uTime, uSway: this.#grassSway }),
         this.#grassCapacity,
       )

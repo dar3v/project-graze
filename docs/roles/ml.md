@@ -79,7 +79,7 @@ Each item is done only when every checkbox is ticked.
 - [x] `model.json`: weights, scaler, OOD parameters, temperature, sized to load quickly (cap trees and depth if the forest is large) *(softmax, 2.5 KB; temperature folded into the weights)*
 - [x] `model_card.json`: class names and order, feature names and ranges, all metrics, ablations, calibration, importance, versions, citation, limitations *(limitations are an agent draft and need human review)*
 - [x] Fixture file of sample inputs with expected outputs, for the inference test *(`ml/test/fixtures/inference-fixtures.json`, checked against the app runtime)*
-- [ ] Explain function: perturbs each input and returns probability shifts (for Role 2's sensitivity bars) *(not written by Role 3; Role 2's `engine.explainOne` already does this and is tested on the real model. Decide whether that counts)*
+- [x] Explain function: perturbs each input and returns probability shifts (for Role 2's sensitivity bars) *(Role 2's `engine.explainOne` does this and is tested on the real model. Team decision 2026-11-18: it counts as Role 3's explain function)*
 - [ ] Announce the Worker API to Role 2 on Day 4 *(draft in `docs/notes.md` section 8; a human posts it)*
 
 ### D8. Documentation (Days 11-12)

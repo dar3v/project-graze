@@ -42,7 +42,7 @@
         ['T', 'Day/night cycle on or off'],
         ['G', 'Animal speed: match walker, 2×, 4×, full sim speed, paused'],
         ['H', 'Show the walk controls inside the view'],
-        ['P', 'Frame rate, draw counts, animal speed and custom models'],
+        ['P', 'Frame rate, draw counts and animal speed'],
         ['Esc or V', 'Exit walk mode (also the Exit walk mode button). The walk info and settings panel opens'],
         ['Resume walking', 'In that panel: return to the same spot, facing the same way'],
       ],
