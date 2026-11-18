@@ -18,9 +18,9 @@ The code is in good shape. What's left is paperwork, a few decisions, and work o
 |---|---|
 | ~~D14–D17 unticked~~ Done 2026-11-18: D14–D16 checked against the code and ticked. Still open: the D14 count check (5 page switches, 5 walk toggles) and the D15 hand check at 390 px. D17 was dropped. | `docs/roles/world.md:224-270` |
 | ~~`docs/custom-models.md` is missing~~ Done 2026-11-18: custom models are dropped. The loader, manifest, `public/models/`, `models:check` and the guide were removed, so nothing links there any more. | — |
-| `docs/limitations.md` still has its "(stub)" heading and says to copy the README text in word for word. | `docs/limitations.md` |
-| The features README mentions `placeholder.ts` files that were deleted. | `packages/features/README.md:23` |
-| The old terrain generator is still there only because `ml/src/train.ts` uses it. Removing it means rerunning `ml:train`, so either do that or document why it stays. | `apps/web/src/lib/sandbox/terrain.ts` |
+| ~~`docs/limitations.md` is a stub~~ Done 2026-11-18: it now quotes the in-app notice and mirrors the README limitations list. | `docs/limitations.md` |
+| ~~The features README mentions deleted `placeholder.ts` files~~ Done 2026-11-18: it now describes the relative-path imports the consumers use. | `packages/features/README.md:21-24` |
+| ~~The old terrain generator stays for `ml/src/train.ts`~~ Done 2026-11-18: training had already moved to `packages/sim/terrain` (commit `2651b71`), so the generator and its test were deleted. No retrain needed. | `apps/web/src/lib/sandbox/terrain.ts` (deleted) |
 | The rate-limit `namespace: '1001'` is a placeholder copied from the docs. It has to be unique before you deploy. | `cloudflare.config.ts:15` |
 | The knowledge graph was built before the backdrop and `.glb` commit, so it's out of date. Run `/graphify --update` before relying on it for docs. | `graphify-out/` |
 

@@ -194,6 +194,8 @@ this on every page.
 - **Placeholder generator remains** (`sandbox/terrain.ts`) only because
   `ml/src/train.ts` still builds its generated-terrain evaluation with it
   (architecture review candidate 2). The 2D `MapView` was deleted.
+  *(Later: training moved to Role 1's generator, and the placeholder was
+  deleted on 2026-11-18.)*
 - **Elevation slider.** Elevation drives the prediction most, so a fixed
   band gives a near single-class map (99% Lodgepole Pine at the 50% center).
   The Sandbox defaults to a 40% center (a Lodgepole/Ponderosa mix) and lets
