@@ -10,7 +10,6 @@
     "web:dev": "vite --config apps/web/vite.config.ts",
     "web:build": "vite build --config apps/web/vite.config.ts",
     "web:preview": "vite preview --config apps/web/vite.config.ts",
-    "models:check": "node --experimental-strip-types apps/web/scripts/models-check.ts",
     "ml:fetch": "node --experimental-strip-types ml/src/fetch.ts",
     "ml:explore": "node --experimental-strip-types ml/src/explore.ts",
     "ml:train": "node --experimental-strip-types ml/src/fetch.ts && node --experimental-strip-types ml/src/explore.ts && node --experimental-strip-types ml/src/train.ts",

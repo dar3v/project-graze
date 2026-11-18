@@ -16,7 +16,6 @@
  *   walk.ts             walk physics (getGroundHeight, speed, slope, water)
  *   quality.ts          presets and the frame-rate guard
  *   ambient.ts          the backdrop: vantage, continuous turn, idle cost, who draws
- *   models.ts           team-made .glb shapes that replace the code-built ones
  *   pace.ts             animal pace on foot, and the measured speed
  *
  * One class, two uses. The Sandbox's `WorldView` makes an interactive one
@@ -54,10 +53,6 @@ import { advanceHour, dayState, wrapHour } from './daynight.ts'
 import type { DayState } from './daynight.ts'
 import { Fauna, ORBIT_ANIMAL_SCALE, WALK_ANIMAL_SCALE } from './fauna.ts'
 import { Flora } from './flora.ts'
-import { modelsLine, NO_MODELS } from './modelRules.ts'
-import type { ModelReport } from './modelRules.ts'
-import { loadModels } from './models.ts'
-import type { ModelSet } from './models.ts'
 import { PaceMeter } from './pace.ts'
 import { PALETTE } from './palette.ts'
 import { DEFAULT_QUALITY, FpsGuard, QUALITY, TARGET_FPS } from './quality.ts'
@@ -151,8 +146,6 @@ export interface WorldStats {
   readonly mode: ViewMode
   /** Median speed of the animals that moved since the last reading, cells per second (D16). */
   readonly animalSpeed: number
-  /** The models line (D17), for example `models: 0/10 custom, 10 default`. */
-  readonly models: string
   /** False while this renderer is not the one drawing (D14). */
   readonly active: boolean
 }
@@ -177,8 +170,6 @@ export interface WorldRendererOptions {
    * true for an interactive or ambient renderer.
    */
   readonly scenery?: boolean
-  /** Team-made models (D17). Default: the app's set (`loadModels()`). Pass null for the code-built shapes only. */
-  readonly models?: Promise<ModelSet> | null
   /** Called with the clicked cell (select tool) or the cell underfoot (walk mode, E). */
   readonly onPick?: (x: number, y: number) => void
   /** Debounced: the union of cells whose raw inputs may have changed. */
@@ -387,9 +378,6 @@ export class WorldRenderer {
   #look: LookSettings = DEFAULT_LOOK
   #walkYaw: number | null = null
 
-  // Custom models (D17)
-  #modelReport: ModelReport = NO_MODELS
-
   // Pointer state (orbit view)
   #pointer = new THREE.Vector2()
   #pointerInside = false
@@ -482,15 +470,6 @@ export class WorldRenderer {
     this.#resize = new ResizeObserver(() => this.#onResize())
     this.#resize.observe(host)
     this.#onResize()
-
-    // Team-made shapes replace the code-built ones when they arrive (D17).
-    // Until then, and for every slot that fails, the code-built shape is drawn.
-    if (this.#scenery && opts.models !== null) {
-      void (opts.models ?? loadModels()).then(
-        (set) => this.#applyModels(set),
-        () => undefined, // loadModelSet never rejects; a custom promise might
-      )
-    }
 
     // A hidden tab draws nothing (rAF already pauses there; this also resets the frame-rate guard).
     const doc = host.ownerDocument
@@ -786,7 +765,6 @@ export class WorldRenderer {
       quality: this.#quality,
       mode: this.#mode,
       animalSpeed: this.#pace.read(),
-      models: modelsLine(this.#modelReport),
       active: this.#active,
     }
   }
@@ -967,26 +945,6 @@ export class WorldRenderer {
     this.#cullCenter = null
     this.#sun.shadow.map?.dispose()
     this.#sun.shadow.map = null
-  }
-
-  /** Swap in the team-made shapes that loaded and passed validation (D17). */
-  #applyModels(set: ModelSet): void {
-    if (this.#destroyed) return
-    this.#modelReport = set.report
-    const { herbivore, predator, ...plants } = set.geometries
-    if (Object.keys(plants).length > 0) {
-      this.#flora.setShapes(plants)
-      this.#floraDirty = true
-      this.#grassCenter = null
-      this.#syncFlora()
-      if (this.#active && !this.#ambient && this.#mode === 'walk' && this.#walkReady) this.#syncGrass(true)
-    }
-    if (herbivore || predator) {
-      this.#fauna.setShapes({ ...(herbivore ? { herbivore } : {}), ...(predator ? { predator } : {}) })
-      this.#placeAnimals()
-    }
-    this.#shadowsDirty = true
-    this.requestRender()
   }
 
   #syncFlora(): void {

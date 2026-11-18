@@ -178,7 +178,7 @@ those z-scores. This is a diagonal Mahalanobis distance divided by √d.
   team says the model is frozen.
 - Role 2: `apps/web/src/lib/sandbox/terrain.ts` (the placeholder generator)
   has no users left now that `ml/src/train.ts` uses Role 1's generator.
-  Its own header says it can be deleted.
+  Its own header says it can be deleted. *(deleted 2026-11-18)*
 
 ## 8. Worker API announcement (D7, D10) *(agent draft, 2026-11-15)*
 

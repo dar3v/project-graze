@@ -75,7 +75,7 @@ Each item is done only when every checkbox is ticked.
 - [x] Editable form with every model feature, prefilled from the cell
 - [x] Validation for missing, non-numeric, and out-of-range values, using ranges from `model_card.json` (nothing hard-coded)
 - [x] Output: predicted cover type, probability bars, one-sentence explanation
-- [ ] Sensitivity bars (how each input moves the probabilities), provided by Role 3's explain function *(bars shown using a generic ±10% method; waiting on Role 3's explain function)*
+- [x] Sensitivity bars (how each input moves the probabilities), provided by Role 3's explain function *(`engine.explainOne`, called from `SiteProbe.svelte`, nudges each input by a step of its range and shows the probability shift. Team decision 2026-11-18: it counts as Role 3's explain function)*
 - [x] Out-of-range and OOD warnings shown in plain language
 - [x] Validation unit tests
 
@@ -259,7 +259,7 @@ How it behaves:
 - Reduced motion: Role 1's scene is told when the user has asked for reduced motion, so it can keep the camera still.
 - Persistence: the background stays mounted across all three pages, so switching tabs doesn't reload the 3D scene.
 
-Decision for you: the background is display-only and doesn't respond to clicks, so the 2D placeholder map is still how you click cells on the Sandbox page. Do you want clicking to happen on the 3D background instead? If so, the Sandbox page would need to let clicks through to it, and the dimming would probably be lighter there. Otherwise the 2D map box gets replaced by a second, interactive view of the world.
+*(Decided 2026-11-18: cell picking is in the 3D view only, in the Sandbox's `WorldView`. The 2D map was removed and the background stays display-only.)* Decision for you: the background is display-only and doesn't respond to clicks, so the 2D placeholder map is still how you click cells on the Sandbox page. Do you want clicking to happen on the 3D background instead? If so, the Sandbox page would need to let clicks through to it, and the dimming would probably be lighter there. Otherwise the 2D map box gets replaced by a second, interactive view of the world.
 
 ---
 

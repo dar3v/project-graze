@@ -20,9 +20,9 @@ the app). See README.md "The ML problem" for the feature list.
 
 `package.json` declares `name` + `exports`, so Node resolves `@graze/features`
 by self-reference from inside this package (covered by the unit test). The
-placeholder consumers in `apps/web/src/placeholder.ts` and
-`ml/src/placeholder.ts` use relative `.ts` imports for now: this keeps `tsc`
-and Vite/Node working without a pnpm workspace.
+consumers (`apps/web`, `ml/` and `packages/sim`) import it by relative path,
+for example `../../packages/features/src/index.ts`: this keeps `tsc` and
+Vite/Node working without a pnpm workspace.
 
 There is deliberately **no `packages:` field in `pnpm-workspace.yaml`**:
 `cf` (beta) refuses to build from a pnpm workspace root, and the Worker lives

@@ -21,7 +21,7 @@ pnpm typecheck     # includes tsc -p apps/web (Svelte markup is checked by the V
 | `src/lib/model/` | Inference: `modelCard.ts` (schema + parser), `validation.ts`, `inference.ts` (softmax/mlp/forest), `engine.ts` (predict/explain), `loader.ts`, `worker.ts`, `client.ts`, `protocol.ts` |
 | `src/lib/model/stub.ts` | **STUB** fake predictor. Remove before Day 12 (`config.ts` → `ALLOW_STUB_MODEL = false`) |
 | `src/lib/probe/SiteProbe.svelte` | Site Probe form, validation, prediction, explanation, sensitivity bars, OOD warnings |
-| `src/lib/sandbox/` | Placeholder 2D map and terrain-feature computation (stands in for Role 1's world), cell selection hand-off |
+| `src/lib/sandbox/` | Cell selection hand-off (picked in Role 1's 3D view), the walk info panel and world import/export |
 | `src/lib/sim/` | Herd sim UI: controls, score, population chart, event log, rules table |
 | `src/lib/routes/` | Sandbox, Model Report, Responsible Use pages |
 | `public/model/` | **Role 3** drops `model.json` and `model_card.json` here |
