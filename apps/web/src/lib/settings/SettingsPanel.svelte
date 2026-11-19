@@ -168,7 +168,7 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    font-size: 12px;
+    font-size: 15px;
     color: var(--text-2);
   }
 
@@ -178,7 +178,7 @@
 
   .small,
   .pending {
-    font-size: 11px;
+    font-size: 14px;
   }
 
   .pending {
@@ -198,13 +198,13 @@
   }
 
   .row {
-    font-size: 12px;
+    font-size: 15px;
     color: var(--text-2);
   }
 
   kbd {
     font-family: var(--mono);
-    font-size: 11px;
+    font-size: 14px;
     color: var(--text);
     border: 1px solid var(--border);
     padding: 0 5px;

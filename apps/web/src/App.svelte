@@ -98,8 +98,8 @@
   }
 
   .badges .btn {
-    font-size: 10px;
-    padding: 5px 10px;
+    font-size: 13px;
+    padding: 6px 12px;
     background: rgba(8, 10, 13, 0.85);
   }
 
@@ -108,7 +108,7 @@
   }
 
   h1 {
-    font-size: clamp(26px, 3.2vw, 40px);
+    font-size: clamp(32px, 4vw, 50px);
     font-weight: 300;
     letter-spacing: 0.36em;
     text-transform: uppercase;
@@ -117,7 +117,7 @@
 
   .tagline {
     margin-top: 12px;
-    font-size: 13px;
+    font-size: 16px;
     letter-spacing: 0.04em;
     color: var(--text-2);
   }

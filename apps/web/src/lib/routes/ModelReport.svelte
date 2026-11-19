@@ -185,8 +185,8 @@
           <rect x={20 + b.lower * 190} y={200 - b.accuracy * 190} width={Math.max(1, (b.upper - b.lower) * 190 - 2)} height={b.accuracy * 190} fill="#4f555c" />
           <circle cx={20 + b.confidence * 190} cy={200 - b.confidence * 190} r="2" fill="#d4d7dc" />
         {/each}
-        <text x="20" y="216" fill="#8a9098" font-size="9">confidence →</text>
-        <text x="2" y="10" fill="#8a9098" font-size="9" transform="rotate(90 2 10)">accuracy →</text>
+        <text x="20" y="216" fill="#8a9098" font-size="11">confidence →</text>
+        <text x="2" y="10" fill="#8a9098" font-size="11" transform="rotate(90 2 10)">accuracy →</text>
       </svg>
       <div class="table-scroll">
         <table>
@@ -267,23 +267,23 @@
 
 <style>
   .lead {
-    font-size: 12px;
+    font-size: 15px;
     margin-bottom: 24px;
   }
 
   code {
-    font-size: 12px;
+    font-size: 15px;
     color: var(--text);
   }
 
   .missing {
-    font-size: 12px;
+    font-size: 15px;
     border: 1px dashed var(--border);
     padding: 8px 12px;
   }
 
   th[scope='row'] {
-    width: 160px;
+    width: 200px;
     white-space: nowrap;
   }
 
@@ -293,20 +293,20 @@
   }
 
   .small {
-    font-size: 11px;
+    font-size: 14px;
   }
 
   .steps {
     margin: 0;
     padding-left: 20px;
     color: var(--text-2);
-    font-size: 12px;
+    font-size: 15px;
   }
 
   .sw {
     display: inline-block;
-    width: 8px;
-    height: 8px;
+    width: 10px;
+    height: 10px;
     margin-right: 8px;
   }
 
@@ -339,7 +339,7 @@
 
   .cm th[scope='row'] {
     width: auto;
-    font-size: 11px;
+    font-size: 14px;
   }
 
   .reliability {
@@ -359,10 +359,10 @@
 
   .fi li {
     display: grid;
-    grid-template-columns: minmax(150px, 230px) 1fr 60px;
+    grid-template-columns: minmax(190px, 290px) 1fr 75px;
     gap: 12px;
     align-items: center;
-    font-size: 12px;
+    font-size: 15px;
     color: var(--text-2);
   }
 

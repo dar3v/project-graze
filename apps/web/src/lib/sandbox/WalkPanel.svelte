@@ -184,7 +184,7 @@
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    width: min(560px, calc(100vw - 24px));
+    width: min(700px, calc(100vw - 24px));
     max-height: calc(100vh - 24px);
     max-height: calc(100dvh - 24px);
     overflow-y: auto;
@@ -222,7 +222,7 @@
   }
 
   .small {
-    font-size: 11px;
+    font-size: 14px;
   }
 
   ul {
@@ -230,7 +230,7 @@
     padding-left: 18px;
     display: grid;
     gap: 6px;
-    font-size: 12px;
+    font-size: 15px;
     color: var(--text-2);
   }
 
@@ -244,7 +244,7 @@
     grid-template-columns: max-content 1fr;
     gap: 4px 14px;
     margin: 0;
-    font-size: 12px;
+    font-size: 15px;
   }
 
   dt {
@@ -265,7 +265,7 @@
 
   kbd {
     font-family: var(--mono);
-    font-size: 11px;
+    font-size: 14px;
     color: var(--text);
     border: 1px solid var(--border);
     padding: 0 5px;
@@ -273,7 +273,7 @@
   }
 
   .links {
-    font-size: 12px;
+    font-size: 15px;
     text-align: center;
   }
 </style>

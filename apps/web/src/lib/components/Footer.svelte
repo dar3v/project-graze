@@ -24,7 +24,7 @@
     padding-top: 24px;
     border-top: 1px solid #16191c;
     text-align: center;
-    font-size: 11px;
+    font-size: 14px;
     line-height: 1.7;
     color: var(--text-2);
     letter-spacing: 0.02em;

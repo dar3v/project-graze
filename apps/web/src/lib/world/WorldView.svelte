@@ -51,6 +51,8 @@
     cover: Uint8Array | null
     confidence?: Float32Array | null
     ood: Uint8Array | null
+    /** Rounded percent of land per class, shown in the legend next to each class. */
+    shares?: readonly number[] | null
     selected: { x: number; y: number } | null
     herbivores?: Float32Array | null
     predators?: Float32Array | null
@@ -113,6 +115,7 @@
     cover,
     confidence = null,
     ood,
+    shares = null,
     selected,
     herbivores = null,
     predators = null,
@@ -147,12 +150,6 @@
 
   let host: HTMLDivElement | undefined = $state()
   let frame: HTMLDivElement | undefined = $state()
-  let walkButton: HTMLButtonElement | undefined = $state()
-
-  /** Put keyboard focus on the "Walk here" button (the page calls this when its walk panel closes). */
-  export function focusWalkButton(): void {
-    walkButton?.focus()
-  }
   let world: WorldRenderer | null = $state.raw(null)
   let failure: string | null = $state(null)
 
@@ -337,6 +334,9 @@
   const classColors = $derived(classes.map((_, i) => classOverlay(i)))
   /** Legend shown with the plants: walk mode, or orbit view under the Terrain overlay. */
   const plantLegend = $derived(!!cover && (mode === 'walk' || overlayMode === 'terrain'))
+  // The class list also carries the shares, so it stays in every overlay once there is a cover map.
+  const listClasses = $derived(plantLegend || (!!cover && (overlayMode === 'cover' || !!shares)))
+  const showRamp = $derived(!plantLegend && overlayMode === 'confidence' && !!confidence)
 
   onMount(() => {
     if (!host) return
@@ -529,6 +529,7 @@
         {#if busy}
           <div class="busy" aria-live="polite">{busy}</div>
         {/if}
+        <button type="button" class="photo" onclick={photo} title="Save the view as a PNG (C)">Photo</button>
         {#if perf}
           <div class="orbit-perf">{perf.drawCalls} draw calls · {Math.round(perf.triangles / 1000)}k triangles · {perf.plants} plants · {perf.geometries} geometries · {perf.textures} textures · {perf.programs} programs</div>
         {/if}
@@ -552,18 +553,20 @@
           </button>
         {/each}
         <span class="spacer"></span>
-        <button type="button" bind:this={walkButton} onclick={() => (mode === 'walk' ? exitWalk('button') : setMode('walk'))} aria-pressed={mode === 'walk'}>
-          {mode === 'walk' ? 'Back to orbit' : 'Walk here'}
-        </button>
-        <button type="button" onclick={photo} title="Save the view as a PNG">Photo</button>
+        <button type="button" class:active={cycle} aria-pressed={cycle} onclick={() => setCycle(!cycle)}>Day/night cycle</button>
+        <button type="button" class:active={oodMarks} aria-pressed={oodMarks} onclick={() => setShowOod(!oodMarks)} disabled={mode === 'walk'}>Low-trust cells</button>
       </div>
       <label class:dimmed={tool === 'select' || mode === 'walk'}>
         <span class="label">Radius · {radius} cells</span>
-        <input type="range" min="1" max="20" step="1" bind:value={radius} disabled={tool === 'select' || mode === 'walk'} />
+        <input type="range" aria-valuetext="{radius} cells" min="1" max="20" step="1" bind:value={radius} disabled={tool === 'select' || mode === 'walk'} />
       </label>
       <label class:dimmed={tool === 'select' || mode === 'walk'}>
         <span class="label">Strength · {strength}</span>
         <input type="range" min="5" max="120" step="5" bind:value={strength} disabled={tool === 'select' || mode === 'walk'} />
+      </label>
+      <label>
+        <span class="label">Time · {formatHour(hour)}</span>
+        <input type="range" aria-valuetext={formatHour(hour)} min="0" max="24" step="0.25" value={hour} oninput={(e) => setHour(Number(e.currentTarget.value))} />
       </label>
       <label class:dimmed={mode === 'walk'}>
         <span class="label">Overlay{mode === 'walk' ? ' · orbit view only' : ''}</span>
@@ -573,41 +576,31 @@
           <option value="confidence" disabled={!confidence}>Confidence</option>
         </select>
       </label>
-      <label>
-        <span class="label">Time · {formatHour(hour)}</span>
-        <input type="range" min="0" max="24" step="0.25" value={hour} oninput={(e) => setHour(Number(e.currentTarget.value))} />
-      </label>
-      <div class="checks">
-        <!-- empty label line so the boxes start at control height, not label height -->
-        <span class="label" aria-hidden="true">&nbsp;</span>
-        <label class="check">
-          <input type="checkbox" checked={cycle} onchange={(e) => setCycle(e.currentTarget.checked)} />
-          <span>Day/night cycle</span>
-        </label>
-        <label class="check" class:dimmed={mode === 'walk'}>
-          <input type="checkbox" checked={oodMarks} onchange={(e) => setShowOod(e.currentTarget.checked)} disabled={mode === 'walk'} />
-          <span>Mark low-trust cells</span>
-        </label>
-      </div>
     </div>
 
-    <ul class="legend" aria-label="Legend">
-      {#if plantLegend}
+    <ul class="legend" aria-label={shares ? 'Legend, with the share of land per predicted cover type' : 'Legend'}>
+      {#if listClasses}
+        {#if shares}<li class="label">Share of land</li>{/if}
         {#each classes as name, i (i)}
-          <li><span class="sw tree" style:color={PALETTE.vegetation.classTints[i % PALETTE.vegetation.classTints.length]}></span>{name}</li>
+          <li>
+            {#if plantLegend}
+              <span class="sw tree" style:color={PALETTE.vegetation.classTints[i % PALETTE.vegetation.classTints.length]}></span>
+            {:else}
+              <span class="sw" style:background={classColors[i]}></span>
+            {/if}{name}{#if shares}<span class="pct">{shares[i] ?? 0}%</span>{/if}
+          </li>
         {/each}
-        <li><span class="sw tree" style:color={PALETTE.vegetation.lowTrust}></span>Sparse, grey plants: low trust (unlike the training data)</li>
-      {:else if overlayMode === 'cover' && cover}
-        {#each classes as name, i (i)}
-          <li><span class="sw" style:background={classColors[i]}></span>{name}</li>
-        {/each}
-      {:else if overlayMode === 'confidence' && confidence}
+        {#if plantLegend}
+          <li><span class="sw tree" style:color={PALETTE.vegetation.lowTrust}></span>Sparse, grey plants: low trust</li>
+        {/if}
+      {/if}
+      {#if showRamp}
         <li><span>Low</span><span class="ramp" style:background={CONF_GRADIENT}></span><span>High confidence</span></li>
-      {:else}
+      {:else if !listClasses}
         <li>Terrain colored by elevation and steepness</li>
       {/if}
       {#if mode === 'orbit' && oodMarks && ood}
-        <li><span class="sw ood" style:background={OOD_CSS}></span>Low trust: unlike the training data (out of distribution)</li>
+        <li><span class="sw ood" style:background={OOD_CSS}></span>Low trust: unlike the training data</li>
       {/if}
     </ul>
   {/if}
@@ -660,20 +653,27 @@
     top: 10px;
     left: 50%;
     transform: translateX(-50%);
-    padding: 4px 10px;
-    font-size: 11px;
+    padding: 5px 12px;
+    font-size: 14px;
     color: var(--text-2);
     background: rgb(0 0 0 / 0.55);
     pointer-events: none;
+  }
+
+  .photo {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background: rgb(0 0 0 / 0.55);
   }
 
   .orbit-perf {
     position: absolute;
     left: 10px;
     bottom: 10px;
-    padding: 4px 8px;
+    padding: 5px 10px;
     font-family: var(--mono);
-    font-size: 10px;
+    font-size: 13px;
     color: var(--text-2);
     background: rgb(0 0 0 / 0.55);
     pointer-events: none;
@@ -681,7 +681,7 @@
 
   .perf-notice {
     margin: 0;
-    font-size: 11px;
+    font-size: 14px;
     color: var(--warn);
   }
 
@@ -700,14 +700,15 @@
 
   .toolbar {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    /* Radius, Strength, Time and Overlay on one row; the select gets a bit more for its option text */
+    grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(0, 1.4fr);
     gap: 12px;
-    /* top-align so labels share one line even though the select is taller than the sliders */
-    align-items: start;
   }
 
   .toolbar label {
     display: grid;
+    /* label on top; the control fills the rest of the row (see .toolbar input[type=range]) */
+    grid-template-rows: auto 1fr;
     gap: 6px;
     min-width: 0;
   }
@@ -739,30 +740,11 @@
     opacity: 0.45;
   }
 
-  /* two boxes side by side need about two control columns of width */
-  .checks {
-    grid-column: span 2;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px 16px;
+  /* slider tracks sit level with the middle of the select */
+  .toolbar input[type='range'] {
+    align-self: center;
   }
 
-  .checks > .label {
-    flex-basis: 100%;
-  }
-
-  .check {
-    display: flex !important;
-    align-items: center;
-    gap: 8px;
-    font-size: 11px;
-    color: var(--text-2);
-    white-space: nowrap;
-  }
-
-  .check input {
-    width: auto;
-  }
 
   .legend {
     list-style: none;
@@ -770,9 +752,9 @@
     margin: 0;
     display: flex;
     flex-wrap: wrap;
-    justify-content: center;
-    gap: 6px 16px;
-    font-size: 11px;
+    gap: 4px 18px;
+    font-size: 14px;
+    line-height: 1.5;
     color: var(--text-2);
   }
 
@@ -782,19 +764,25 @@
     gap: 6px;
   }
 
+  .pct {
+    color: var(--text-3);
+    font-variant-numeric: tabular-nums;
+  }
+
   .sw {
     display: inline-block;
-    width: 8px;
-    height: 8px;
+    flex: none;
+    width: 10px;
+    height: 10px;
   }
 
   .sw.tree {
     width: 0;
     height: 0;
     background: none !important;
-    border-left: 5px solid transparent;
-    border-right: 5px solid transparent;
-    border-bottom: 9px solid currentColor;
+    border-left: 6px solid transparent;
+    border-right: 6px solid transparent;
+    border-bottom: 11px solid currentColor;
   }
 
   .sw.ood {
@@ -803,7 +791,7 @@
 
   .ramp {
     display: inline-block;
-    width: 80px;
-    height: 8px;
+    width: 100px;
+    height: 10px;
   }
 </style>

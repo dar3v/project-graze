@@ -7,7 +7,6 @@
   import { POSE_STRIDE, type InterpolatedPoses } from '../deps/herd.ts'
   import { inputSpec } from '../model/modelCard.ts'
   import SiteProbe from '../probe/SiteProbe.svelte'
-  import { classColor } from '../sandbox/palette.ts'
   import WalkPanel from '../sandbox/WalkPanel.svelte'
   import { fetchWorld, modelMismatchNotice, parseWorldHash, saveWorld, worldShareHash, type SavedWorld } from '../sandbox/worldIo.ts'
   import SettingsPanel from '../settings/SettingsPanel.svelte'
@@ -138,8 +137,8 @@
     probeOpen.set(true)
   }
 
-  // Share of land per class, from one cover map and the water mask it was predicted with.
-  const counts = $derived.by(() => {
+  // Rounded percent of land per class, from one cover map and the water mask it was predicted with.
+  const shares = $derived.by(() => {
     if (!map || !card) return null
     const { cover, inputs } = map
     const out = new Array<number>(card.classes.length).fill(0)
@@ -149,7 +148,7 @@
       out[cover[i]]++
       land++
     }
-    return { out, land }
+    return out.map((n) => (land ? Math.round((n / land) * 100) : 0))
   })
 
   // ---- view mode, settings, help ---------------------------------------
@@ -171,7 +170,7 @@
 
   // ---- leaving walk mode: the info and settings panel (ROLE-1 D15) --------
 
-  let worldView: ReturnType<typeof WorldView> | undefined = $state()
+  let walkButton: HTMLButtonElement | undefined = $state()
   /** Set when walk mode was left: why, and the cell last stood on. The panel is open while it is set. */
   let walkExit: WalkExit | null = $state.raw(null)
   let herd: HerdSummary | null = $state.raw(null)
@@ -183,7 +182,7 @@
   function closeWalkPanel(): void {
     walkExit = null
     // Focus goes back to where walk mode is entered from.
-    queueMicrotask(() => worldView?.focusWalkButton())
+    queueMicrotask(() => walkButton?.focus())
   }
 
   function resumeWalk(): void {
@@ -352,6 +351,7 @@
         class:active={$viewMode === 'walk'}
         disabled={!WORLD_FEATURES.walkMode}
         title={WORLD_FEATURES.walkMode ? 'Walk at ground level (V)' : 'Walk mode comes with the 3D world update (Role 1)'}
+        bind:this={walkButton}
         onclick={() => setMode('walk')}>Walk <kbd>V</kbd></button
       >
     </div>
@@ -373,7 +373,6 @@
 
   <div class="map">
     <WorldView
-      bind:this={worldView}
       onexit={onWalkExit}
       lookSensitivity={$settings.lookSensitivity}
       invertLookY={$settings.invertLookY}
@@ -390,6 +389,7 @@
       cover={map?.cover ?? null}
       confidence={map?.confidence ?? null}
       ood={map?.ood ?? null}
+      {shares}
       selected={$probeOpen ? $selectedCell : null}
       herbivores={poses?.herbivores ?? null}
       predators={poses?.predators ?? null}
@@ -428,18 +428,6 @@
   {/if}
 
   <div class="covered" inert={$viewMode === 'walk'}>
-  {#if counts && card}
-    <ul class="legend" aria-label="Share of land per predicted cover type">
-      <li class="label">Share of land</li>
-      {#each card.classes as name, i (i)}
-        <li>
-          <span class="sw" style:background={classColor(i)}></span>{name}
-          <span class="pct">{counts.land ? Math.round((counts.out[i] / counts.land) * 100) : 0}%</span>
-        </li>
-      {/each}
-    </ul>
-  {/if}
-
   <p class="status muted" aria-live="polite">
     {#if predictionState === 'unavailable'}
       <span class="err">Predictions unavailable: no model loaded.</span>
@@ -472,7 +460,7 @@
         oninput={(e) => worldConfig.update((c) => ({ ...c, center: Number(e.currentTarget.value) / 100 }))}
       />
     </label>
-    <label>
+    <label class="water">
       <span class="label">Water level · {Math.round($worldConfig.waterShare * 100)}% of cells</span>
       <input
         type="range"
@@ -626,7 +614,7 @@
   }
 
   .hint {
-    font-size: 12px;
+    font-size: 15px;
     margin: 14px 0;
   }
 
@@ -652,20 +640,20 @@
 
   kbd {
     font-family: var(--mono);
-    font-size: 10px;
+    font-size: 13px;
     color: var(--text-3);
     margin-left: 4px;
   }
 
   .world-notice {
-    font-size: 11px;
+    font-size: 14px;
     color: var(--text-2);
     margin: 8px 0 24px;
   }
 
   .status {
     text-align: center;
-    font-size: 11px;
+    font-size: 14px;
     margin-top: 4px;
     min-height: 1.6em;
   }
@@ -674,41 +662,44 @@
     color: var(--error);
   }
 
-  .legend {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: 6px 16px;
-    font-size: 11px;
-    color: var(--text-2);
-  }
-
-  .sw {
-    display: inline-block;
-    width: 8px;
-    height: 8px;
-    margin-right: 6px;
-  }
-
-  .pct {
-    color: var(--text-3);
-    margin-left: 4px;
-  }
-
   .controls {
     margin-top: 8px;
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-    gap: 16px;
-    align-items: end;
+    /* the seed needs little width; each slider column is at least as wide as its one-line label */
+    grid-template-columns: 8em minmax(max-content, 1fr) minmax(max-content, 1fr);
+    gap: 10px 20px;
   }
 
+  /* below this the three labels no longer fit side by side: water level gets its own row */
+  @media (max-width: 1340px) {
+    .controls {
+      grid-template-columns: 8em minmax(0, 1fr);
+    }
+
+    .controls .water {
+      grid-column: 1 / -1;
+    }
+  }
+
+  @media (max-width: 960px) {
+    .controls {
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    }
+  }
+
+  /* same shape as the toolbar: label on top, sliders level with the middle of the seed box */
   .controls label {
     display: grid;
+    grid-template-rows: auto 1fr;
     gap: 6px;
+  }
+
+  .controls .label {
+    white-space: nowrap;
+  }
+
+  .controls input[type='range'] {
+    align-self: center;
   }
 
   .share {
@@ -736,7 +727,7 @@
   }
 
   .small {
-    font-size: 11px;
+    font-size: 14px;
     overflow-wrap: anywhere;
   }
 
@@ -758,7 +749,7 @@
   }
 
   code {
-    font-size: 12px;
+    font-size: 15px;
     color: var(--text);
   }
 </style>

@@ -28,7 +28,7 @@
     max-height: 220px;
     overflow-y: auto;
     padding: 10px 12px;
-    font-size: 12px;
+    font-size: 15px;
   }
 
   ol {
@@ -50,6 +50,6 @@
   .t {
     color: var(--text-3);
     display: inline-block;
-    min-width: 56px;
+    min-width: 70px;
   }
 </style>

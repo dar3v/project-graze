@@ -71,7 +71,7 @@
     display: inline-block;
     border: 1px solid var(--text-3);
     color: var(--text);
-    font-size: 11px;
+    font-size: 14px;
     letter-spacing: 0.15em;
     text-transform: uppercase;
     padding: 3px 10px;
@@ -79,11 +79,11 @@
   }
 
   .small {
-    font-size: 12px;
+    font-size: 15px;
   }
 
   code {
-    font-size: 11px;
+    font-size: 14px;
     color: var(--text);
   }
 </style>

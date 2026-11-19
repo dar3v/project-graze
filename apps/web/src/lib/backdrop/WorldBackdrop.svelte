@@ -174,7 +174,7 @@
     max-width: calc(100vw - 16px);
     padding: 4px 8px;
     font-family: var(--mono);
-    font-size: 10px;
+    font-size: 13px;
     color: #d4d7dc;
     background: rgb(0 0 0 / 0.7);
   }

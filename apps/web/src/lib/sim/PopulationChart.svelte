@@ -104,7 +104,7 @@
     display: flex;
     flex-wrap: wrap;
     gap: 16px;
-    font-size: 11px;
+    font-size: 14px;
     color: var(--text-2);
   }
 

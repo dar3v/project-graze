@@ -26,7 +26,7 @@ body {
   background: var(--bg);
   color: var(--text);
   font-family: var(--mono);
-  font-size: 13px;
+  font-size: 16px;
   line-height: 1.65;
   -webkit-font-smoothing: antialiased;
 }
@@ -52,7 +52,7 @@ p {
 }
 
 h2 {
-  font-size: 12px;
+  font-size: 15px;
   font-weight: 400;
   letter-spacing: 0.15em;
   text-transform: uppercase;
@@ -61,7 +61,7 @@ h2 {
 }
 
 h3 {
-  font-size: 12px;
+  font-size: 15px;
   font-weight: 400;
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -74,7 +74,7 @@ p + p {
 }
 
 .label {
-  font-size: 11px;
+  font-size: 14px;
   letter-spacing: 0.15em;
   text-transform: uppercase;
   color: var(--text-3);
@@ -97,13 +97,13 @@ p + p {
 button,
 .btn {
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: 14px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--text-2);
   background: transparent;
   border: 1px solid var(--border);
-  padding: 7px 14px;
+  padding: 9px 18px;
   cursor: pointer;
   text-decoration: none;
   display: inline-block;
@@ -133,11 +133,11 @@ button.primary {
 input,
 select {
   font-family: var(--mono);
-  font-size: 13px;
+  font-size: 16px;
   color: var(--text);
   background: var(--bg-2);
   border: 1px solid var(--border);
-  padding: 6px 8px;
+  padding: 8px 10px;
   border-radius: 0;
   width: 100%;
 }
@@ -154,13 +154,13 @@ input[aria-invalid='true'] {
 table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 12px;
+  font-size: 15px;
 }
 
 th,
 td {
   text-align: left;
-  padding: 6px 10px 6px 0;
+  padding: 8px 12px 8px 0;
   border-bottom: 1px solid #1a1d21;
   vertical-align: top;
 }
@@ -168,7 +168,7 @@ td {
 th {
   font-weight: 400;
   color: var(--text-3);
-  font-size: 11px;
+  font-size: 14px;
   letter-spacing: 0.1em;
   text-transform: uppercase;
 }
@@ -186,9 +186,9 @@ th.num {
 .notice {
   border: 1px solid var(--border);
   border-left: 2px solid var(--text-3);
-  padding: 10px 14px;
+  padding: 12px 18px;
   color: var(--text-2);
-  font-size: 12px;
+  font-size: 15px;
 }
 
 .notice.warn {
@@ -209,9 +209,9 @@ th.num {
   display: inline-block;
   border: 1px solid var(--warn);
   color: var(--warn);
-  font-size: 10px;
+  font-size: 13px;
   letter-spacing: 0.15em;
-  padding: 1px 6px;
+  padding: 1px 8px;
   text-transform: uppercase;
 }
 

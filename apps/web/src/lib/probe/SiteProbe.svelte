@@ -197,25 +197,25 @@
 
   .intro {
     margin: 10px 0 18px;
-    font-size: 12px;
+    font-size: 15px;
   }
 
   .grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
     gap: 14px 18px;
   }
 
   label {
     display: block;
-    font-size: 11px;
+    font-size: 14px;
     letter-spacing: 0.06em;
     color: var(--text-2);
     margin-bottom: 4px;
   }
 
   .hint {
-    font-size: 11px;
+    font-size: 14px;
     color: var(--text-2);
     margin-top: 4px;
     line-height: 1.45;
@@ -238,7 +238,7 @@
   }
 
   .err-summary {
-    font-size: 12px;
+    font-size: 15px;
     color: var(--error);
   }
 
@@ -247,7 +247,7 @@
   }
 
   .prediction {
-    font-size: 22px;
+    font-size: 28px;
     letter-spacing: 0.12em;
     text-transform: uppercase;
     font-weight: 300;
@@ -269,7 +269,7 @@
   }
 
   .small {
-    font-size: 11px;
+    font-size: 14px;
     margin-bottom: 10px;
   }
 
@@ -286,7 +286,7 @@
     grid-template-columns: minmax(150px, 220px) 1fr 140px;
     gap: 12px;
     align-items: center;
-    font-size: 12px;
+    font-size: 15px;
     color: var(--text-2);
   }
 
@@ -326,7 +326,7 @@
   .vals {
     text-align: right;
     font-variant-numeric: tabular-nums;
-    font-size: 11px;
+    font-size: 14px;
   }
 
   @media (max-width: 560px) {

@@ -351,7 +351,7 @@
 
 <style>
   .intro {
-    font-size: 12px;
+    font-size: 15px;
     margin-bottom: 16px;
   }
 
@@ -366,14 +366,14 @@
     display: inline-flex;
     gap: 6px;
     align-items: center;
-    font-size: 11px;
+    font-size: 14px;
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: var(--text-2);
   }
 
   .inline input {
-    width: 80px;
+    width: 100px;
   }
 
   .inline select {
@@ -381,25 +381,25 @@
   }
 
   .small {
-    font-size: 12px;
+    font-size: 15px;
     margin-top: 12px;
   }
 
   .stats {
     margin-top: 24px;
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
     gap: 12px;
   }
 
   .big {
-    font-size: 22px;
+    font-size: 28px;
     font-weight: 300;
     font-variant-numeric: tabular-nums;
   }
 
   .of {
-    font-size: 12px;
+    font-size: 15px;
     color: var(--text-3);
     margin-left: 4px;
   }
@@ -410,7 +410,7 @@
   }
 
   code {
-    font-size: 11px;
+    font-size: 14px;
     color: var(--text);
   }
 </style>

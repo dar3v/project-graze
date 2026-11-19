@@ -93,7 +93,7 @@
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    width: min(520px, calc(100vw - 32px));
+    width: min(650px, calc(100vw - 32px));
     max-height: calc(100vh - 32px);
     overflow-y: auto;
     padding: 20px;
@@ -121,7 +121,7 @@
     grid-template-columns: max-content 1fr;
     gap: 4px 14px;
     margin: 0;
-    font-size: 12px;
+    font-size: 15px;
   }
 
   dl.pending {
@@ -135,14 +135,14 @@
 
   kbd {
     font-family: var(--mono);
-    font-size: 11px;
+    font-size: 14px;
     color: var(--text);
     border: 1px solid var(--border);
     padding: 0 5px;
   }
 
   .note {
-    font-size: 11px;
+    font-size: 14px;
     color: var(--warn);
     margin-bottom: 6px;
   }

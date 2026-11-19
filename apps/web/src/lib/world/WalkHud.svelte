@@ -287,7 +287,7 @@
     inset: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
     z-index: 2;
     pointer-events: none;
-    font-size: 11px;
+    font-size: 14px;
     color: #f2f4f6;
   }
 
@@ -301,7 +301,7 @@
   .cell {
     top: 10px;
     left: 10px;
-    max-width: min(60%, 280px);
+    max-width: min(60%, 350px);
     display: grid;
     gap: 2px;
   }
@@ -312,12 +312,12 @@
   }
 
   .name {
-    font-size: 15px;
+    font-size: 19px;
     font-weight: 500;
   }
 
   .state {
-    font-size: 13px;
+    font-size: 16px;
   }
 
   .low {
@@ -352,7 +352,7 @@
   .esc {
     padding: 4px 8px;
     font-family: var(--mono);
-    font-size: 11px;
+    font-size: 14px;
     letter-spacing: 0.08em;
     text-transform: uppercase;
     background: rgb(8 10 13 / 0.62);
@@ -385,7 +385,7 @@
 
   .heading {
     font-family: var(--mono);
-    font-size: 10px;
+    font-size: 13px;
   }
 
   .prompt {
@@ -400,7 +400,7 @@
   }
 
   .prompt strong {
-    font-size: 16px;
+    font-size: 20px;
     font-weight: 500;
   }
 
@@ -428,7 +428,7 @@
 
   .help h3 {
     margin: 0 0 8px;
-    font-size: 13px;
+    font-size: 16px;
   }
 
   .help dl {
@@ -449,7 +449,7 @@
 
   kbd {
     font-family: var(--mono);
-    font-size: 10px;
+    font-size: 13px;
     white-space: nowrap;
   }
 
@@ -466,7 +466,7 @@
     bottom: 34px;
     max-width: min(92%, 560px);
     font-family: var(--mono);
-    font-size: 10px;
+    font-size: 13px;
     line-height: 1.5;
     overflow-wrap: anywhere;
   }

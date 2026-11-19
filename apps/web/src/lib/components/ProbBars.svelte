@@ -25,10 +25,10 @@
 
   li {
     display: grid;
-    grid-template-columns: minmax(120px, 190px) 1fr 56px;
+    grid-template-columns: minmax(150px, 240px) 1fr 70px;
     gap: 12px;
     align-items: center;
-    font-size: 12px;
+    font-size: 15px;
     color: var(--text-2);
   }
 
@@ -38,13 +38,13 @@
 
   .swatch {
     display: inline-block;
-    width: 8px;
-    height: 8px;
+    width: 10px;
+    height: 10px;
     margin-right: 8px;
   }
 
   .track {
-    height: 6px;
+    height: 8px;
     background: #15181b;
   }
 
