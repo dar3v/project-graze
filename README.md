@@ -13,7 +13,7 @@ Sculpt a procedurally generated valley, let a trained model predict what vegetat
 
 | Area | State |
 | --- | --- |
-| Repo and tooling | Built: `pnpm test`, `pnpm typecheck` and `pnpm web:build` pass |
+| update this pls Repo and tooling | Built: `pnpm test`, `pnpm typecheck` and `pnpm web:build` pass |
 | Shared features contract (`@graze/features`) | Built: the only terrain-to-inputs code, used by training and the app |
 | Terrain and 3D world | Built: seeded terrain, water, brush, overlays, cell picking, herds, walk mode, day/night, forest patches |
 | Ambient backdrop | Built: a dimmed, live ground-level view of the world behind every page |
