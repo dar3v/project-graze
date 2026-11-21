@@ -85,7 +85,6 @@
 
 <section class="section" aria-labelledby="ru-title">
   <h2 id="ru-title">Responsible Use</h2>
-  <p class="notice warn draft"><strong>Draft.</strong> This wording is a first draft. The team edits and approves the final text.</p>
 
   <p class="lead">
     Graze is a classroom project. It pairs a real classifier (trained on the Covertype dataset) with a made-up valley and a

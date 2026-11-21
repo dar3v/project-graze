@@ -5,7 +5,7 @@
     "name": "Project Graze habitat classifier",
     "type": "softmax",
     "version": "0.1.0-dev",
-    "trainedAt": "2026-11-14",
+    "trainedAt": "2026-11-21",
     "seed": 42,
     "selectionRule": "Highest mean macro-F1 over the 4 leave-one-wilderness-area-out folds; a simpler model within 0.01 macro-F1 of the best wins (softmax < MLP < forest). Written before any LOAO result (docs/notes.md section 3).",
     "config": {
@@ -2337,7 +2337,7 @@
     "Educational simulation only, not a forest-management or ecological decision tool."
   ],
   "versions": {
-    "node": "v24.18.0",
+    "node": "v24.18.1",
     "pipeline": "ml/src (no ML libraries)",
     "modelJsonBytes": 2523,
     "modelJsonSha256": "277b35d1869457a59f9233f9c72db78ec7d559ac082497e29fc5534d11df373b"

@@ -1,6 +1,6 @@
 {
   "generatedBy": "ml/src/train.ts",
-  "trainedAt": "2026-11-14",
+  "trainedAt": "2026-11-21",
   "seed": 42,
   "maxTrainRows": 150000,
   "grids": {
@@ -6080,5 +6080,5 @@
     },
     "modelJsonBytes": 2523
   },
-  "runtimeSeconds": 246.73769666799998
+  "runtimeSeconds": 414.27198589999995
 }
